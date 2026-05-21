@@ -1,113 +1,208 @@
-export const USD_TO_RUB = 90;
-export const KRW_TO_USD = 0.000746; // 1 KRW = 0.000746 USD (май 2026)
-export const KRW_TO_RUB = 0.0535;
-
-export const COUNTRIES = [
-  { code: "RU", name: "Россия", flag: "🇷🇺", currency: "₽", rate: 0.0535 },
-  { code: "KZ", name: "Казахстан", flag: "🇰🇿", currency: "₸", rate: 0.348 },
-  { code: "KG", name: "Кыргызстан", flag: "🇰🇬", currency: "с", rate: 0.462 },
-  { code: "UZ", name: "Узбекистан", flag: "🇺🇿", currency: "сум", rate: 68.5 },
-] as const;
-
-// Курс отображения в валюте страны (от рублей)
-export const RUB_TO_LOCAL: Record<string, number> = {
-  RU: 1,
-  KZ: 6.5, // 1 RUB = 6.5 KZT
-  KG: 0.862, // 1 RUB = 0.862 KGS
-  UZ: 127, // 1 RUB = 127 UZS
-};
-
-export interface CalcResult {
-  carPriceRub: number;
-  koreaExpensesRub: number;
-  customsDutyRub: number;
-  utilRub: number;
-  brokerRub: number;
-  freightRub: number;
-  totalRub: number;
-  totalLocal: number;
-  currency: string;
+export interface Country {
+  code: string
+  name: string
+  flag: string
+  currency: string
 }
 
-function dutyPerCc(value: number): number {
-  if (value <= 1000) return 1.5;
-  if (value <= 1500) return 1.7;
-  if (value <= 1800) return 2.5;
-  if (value <= 2300) return 2.7;
-  if (value <= 3000) return 3.0;
-  return 3.6;
+export const COUNTRIES: Country[] = [
+  { code: 'RU', name: 'Россия', flag: '🇷🇺', currency: '₽' },
+  { code: 'KZ', name: 'Казахстан', flag: '🇰🇿', currency: '₸' },
+  { code: 'KG', name: 'Кыргызстан', flag: '🇰🇬', currency: 'с' },
+  { code: 'UZ', name: 'Узбекистан', flag: '🇺🇿', currency: 'сум' },
+]
+
+// Курс — обновляется с ЦБ через API, здесь fallback
+export const KRW_TO_RUB = 0.04718
+
+const EUR_RATE = 78.5
+const USD_RATE = 70.95
+
+// Утилизационный сбор 2025 для физлиц
+// Зависит от мощности и возраста авто
+function getUtilSbor(powerHp: number, year: number): number {
+  const BASE = 20000
+  const age = new Date().getFullYear() - year
+
+  function coeff(hp: number, isNew: boolean): number {
+    if (isNew) {
+      if (hp <= 90) return 5.93
+      if (hp <= 150) return 17.07
+      if (hp <= 200) return 44.24
+      if (hp <= 300) return 140.52
+      if (hp <= 400) return 149.44
+      if (hp <= 500) return 347.18
+      return 714.94
+    }
+
+    if (hp <= 90) return 1.67
+    if (hp <= 150) return 6.31
+    if (hp <= 200) return 12.98
+    if (hp <= 300) return 17.57
+    if (hp <= 400) return 35.14
+    if (hp <= 500) return 60.75
+    return 122.38
+  }
+
+  return Math.round(BASE * coeff(powerHp, age < 3))
+}
+
+function getCustomsDutyRu(
+  priceKrw: number,
+  engineCc: number,
+  krwRate: number,
+  year: number,
+): number {
+  const priceRub = priceKrw * krwRate
+  const priceEur = priceRub / EUR_RATE
+  const age = new Date().getFullYear() - year
+
+  let eurPerCc: number
+  let percentRate: number
+
+  if (age < 3) {
+    eurPerCc = 3.5
+    percentRate = 0.48
+  } else if (age <= 5) {
+    if (engineCc <= 1000) {
+      eurPerCc = 1.5
+      percentRate = 0.154
+    } else if (engineCc <= 1500) {
+      eurPerCc = 1.7
+      percentRate = 0.154
+    } else if (engineCc <= 1800) {
+      eurPerCc = 2.5
+      percentRate = 0.154
+    } else if (engineCc <= 2300) {
+      eurPerCc = 2.7
+      percentRate = 0.154
+    } else if (engineCc <= 3000) {
+      eurPerCc = 3.0
+      percentRate = 0.154
+    } else {
+      eurPerCc = 3.6
+      percentRate = 0.154
+    }
+  } else {
+    if (engineCc <= 1000) {
+      eurPerCc = 3.0
+      percentRate = 0.2
+    } else if (engineCc <= 1500) {
+      eurPerCc = 3.2
+      percentRate = 0.2
+    } else if (engineCc <= 1800) {
+      eurPerCc = 3.5
+      percentRate = 0.2
+    } else if (engineCc <= 2300) {
+      eurPerCc = 4.8
+      percentRate = 0.2
+    } else if (engineCc <= 3000) {
+      eurPerCc = 5.0
+      percentRate = 0.2
+    } else {
+      eurPerCc = 5.7
+      percentRate = 0.2
+    }
+  }
+
+  const dutyByVolume = engineCc * eurPerCc * EUR_RATE
+  const dutyByValue = priceEur * percentRate * EUR_RATE
+  return Math.round(Math.max(dutyByVolume, dutyByValue))
+}
+
+export interface CalcResult {
+  carPriceRub: number
+  koreaExpensesRub: number
+  customsDutyRub: number
+  utilRub: number
+  brokerRub: number
+  freightRub: number
+  totalRub: number
+  totalLocal: number
+  currency: string
+  powerHp: number
 }
 
 export function calcFullPrice(
   priceKrw: number,
   engineCc: number,
   countryCode: string,
+  year: number = 2021,
+  powerHp: number = 0,
+  krwRate: number = KRW_TO_RUB,
 ): CalcResult {
-  const cc = engineCc > 0 ? engineCc : 1600;
-  const priceUsd = priceKrw * KRW_TO_USD;
-  const priceRub = priceKrw * KRW_TO_RUB;
-  const priceEur = priceUsd * 0.92;
+  const cc = engineCc > 0 ? engineCc : 1600
+  const hp = powerHp > 0 ? powerHp : estimatePower(cc)
+  const carPriceRub = Math.round(priceKrw * krwRate)
 
-  // Фиксированные расходы в Корее (одинаковы для всех стран)
-  const encarFeeRub = 23540;
-  const koreaExpensesRub = encarFeeRub;
-
-  let customsDutyRub = 0;
-  let utilRub = 0;
-  let brokerRub = 0;
-  let freightRub = 0;
-  let currency = "₽";
-
-  if (countryCode === "RU") {
-    currency = "₽";
-    freightRub = 139100; // фрахт до Владивостока
-
-    const dutyByVolume = cc * dutyPerCc(cc) * USD_TO_RUB;
-    const dutyByPrice = priceEur * 0.154 * USD_TO_RUB * 0.92;
-    customsDutyRub = Math.max(dutyByVolume, dutyByPrice);
-
-    if (cc <= 1000) utilRub = 686000;
-    else if (cc <= 2000) utilRub = 1492800;
-    else if (cc <= 3000) utilRub = 2807400;
-    else utilRub = 4204500;
-
-    brokerRub = 100000; // брокер + СБКТС + ЭПТС
-  } else if (countryCode === "KZ") {
-    currency = "₸";
-    freightRub = 900 * USD_TO_RUB; // фрахт до Алматы
-    customsDutyRub = priceRub * 0.15; // Таможня КЗ: 15%
-    brokerRub = 200 * USD_TO_RUB; // оформление
-  } else if (countryCode === "KG") {
-    currency = "с";
-    freightRub = 950 * USD_TO_RUB;
-    customsDutyRub = priceRub * 0.11;
-    brokerRub = 200 * USD_TO_RUB;
-  } else if (countryCode === "UZ") {
-    currency = "сум";
-    freightRub = 1000 * USD_TO_RUB;
-    customsDutyRub = priceRub * 0.22;
-    brokerRub = 300 * USD_TO_RUB;
+  const RUB_TO_LOCAL: Record<string, number> = {
+    RU: 1,
+    KZ: 6.5,
+    KG: 0.862,
+    UZ: 127,
+  }
+  const CURRENCY: Record<string, string> = {
+    RU: '₽',
+    KZ: '₸',
+    KG: 'с',
+    UZ: 'сум',
   }
 
-  const totalRub =
-    priceRub +
-    koreaExpensesRub +
-    freightRub +
-    customsDutyRub +
-    utilRub +
-    brokerRub;
+  if (countryCode === 'RU') {
+    const freightRub = Math.round(1200 * USD_RATE)
+    const brokerRub = 90000
+    const dutyRub = getCustomsDutyRu(priceKrw, cc, krwRate, year)
+    const feesRub = carPriceRub / USD_RATE <= 10000 ? 6187 : 10500
+    const utilRub = getUtilSbor(hp, year)
+    const totalRub = carPriceRub + freightRub + brokerRub + dutyRub + feesRub + utilRub
 
-  const totalLocal = Math.round(totalRub * (RUB_TO_LOCAL[countryCode] ?? 1));
+    return {
+      carPriceRub,
+      koreaExpensesRub: freightRub,
+      customsDutyRub: dutyRub + feesRub,
+      utilRub,
+      brokerRub,
+      freightRub,
+      totalRub,
+      totalLocal: totalRub,
+      currency: '₽',
+      powerHp: hp,
+    }
+  }
+
+  // KZ, KG, UZ
+  const FREIGHT_USD: Record<string, number> = { KZ: 1560, KG: 1200, UZ: 1950 }
+  const CUSTOMS_RATE: Record<string, number> = { KZ: 0.15, KG: 0.11, UZ: 0.22 }
+
+  const freightRub = Math.round((FREIGHT_USD[countryCode] ?? 1200) * USD_RATE)
+  const brokerRub = Math.round(200 * USD_RATE)
+  const dutyRub = Math.round(carPriceRub * (CUSTOMS_RATE[countryCode] ?? 0.15))
+  const totalRub = carPriceRub + freightRub + brokerRub + dutyRub
+  const localRate = RUB_TO_LOCAL[countryCode] ?? 1
+  const totalLocal = Math.round(totalRub * localRate)
 
   return {
-    carPriceRub: Math.round(priceRub),
-    koreaExpensesRub: Math.round(koreaExpensesRub + freightRub),
-    customsDutyRub: Math.round(customsDutyRub),
-    utilRub: Math.round(utilRub),
-    brokerRub: Math.round(brokerRub),
-    freightRub: Math.round(freightRub),
-    totalRub: Math.round(totalRub),
+    carPriceRub,
+    koreaExpensesRub: freightRub,
+    customsDutyRub: dutyRub,
+    utilRub: 0,
+    brokerRub,
+    freightRub,
+    totalRub,
     totalLocal,
-    currency,
-  };
+    currency: CURRENCY[countryCode] ?? '₽',
+    powerHp: hp,
+  }
 }
+
+// Примерная мощность по объёму если нет данных
+function estimatePower(cc: number): number {
+  if (cc <= 1000) return 75
+  if (cc <= 1400) return 100
+  if (cc <= 1600) return 130
+  if (cc <= 2000) return 150
+  if (cc <= 2500) return 200
+  if (cc <= 3000) return 250
+  return 300
+}
+

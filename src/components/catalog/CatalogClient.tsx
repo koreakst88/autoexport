@@ -25,6 +25,7 @@ export type CatalogCar = {
   body_type: string | null;
   mileage: number | null;
   engine_cc: number | null;
+  power_hp?: number | null;
   fuel_type: string | null;
   transmission: string | null;
   price_krw: number | null;
@@ -107,9 +108,10 @@ function getFirstPhoto(photos: string[] | null) {
 type CatalogClientProps = {
   cars: CatalogCar[];
   initialBrand?: string;
+  krwRateRub?: number;
 };
 
-export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
+export function CatalogClient({ cars, initialBrand, krwRateRub }: CatalogClientProps) {
   const router = useRouter();
   const { isInTelegram, showBackButton, hideBackButton } = useTelegram();
   type CountryCode = (typeof COUNTRIES)[number]["code"];
@@ -160,7 +162,7 @@ export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
     console.log("Расчёт:", {
       priceKrw: 20000000,
       countryCode: selectedCountry.code,
-      result: calcFullPrice(20000000, 1600, selectedCountry.code),
+      result: calcFullPrice(20000000, 1600, selectedCountry.code, 2021, 0, krwRateRub),
     });
   }, [selectedCountry.code]);
 
@@ -210,7 +212,14 @@ export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
       const hasPriceFilter = Boolean(filters.priceFrom || filters.priceTo);
       if (hasPriceFilter) {
         const priceKrw = typeof car.price_krw === "number" ? car.price_krw : 0;
-        const calc = calcFullPrice(priceKrw, car.engine_cc ?? 0, selectedCountry.code);
+        const calc = calcFullPrice(
+          priceKrw,
+          car.engine_cc ?? 0,
+          selectedCountry.code,
+          car.year ?? 2021,
+          car.power_hp ?? 0,
+          krwRateRub,
+        );
         const price = calc.totalLocal;
         if (filters.priceFrom) {
           const min = parseInt(filters.priceFrom, 10);
@@ -303,9 +312,9 @@ export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
             onClick={() => {
               setCountryCode(country.code);
               setIsCountryOpen(false);
-              const preview = calcFullPrice(25_000_000, 1600, country.code);
+              const preview = calcFullPrice(25_000_000, 1600, country.code, 2021, 0, krwRateRub);
               console.log(
-                `Страна: ${country.name}, курс: ${country.rate}, пример цены: ${preview.totalLocal.toLocaleString("ru-RU")} ${country.currency}`,
+                `Страна: ${country.name}, пример цены: ${preview.totalLocal.toLocaleString("ru-RU")} ${country.currency}`,
               );
             }}
                     className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
@@ -369,7 +378,14 @@ export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
           const carPriceRub = formatCarPriceRub(car.price_krw);
           const result =
             typeof car.price_krw === "number"
-              ? calcFullPrice(car.price_krw, car.engine_cc ?? 0, selectedCountry.code)
+              ? calcFullPrice(
+                  car.price_krw,
+                  car.engine_cc ?? 0,
+                  selectedCountry.code,
+                  car.year ?? 2021,
+                  car.power_hp ?? 0,
+                  krwRateRub,
+                )
               : null;
           const specs = [
             car.engine_cc && car.engine_cc > 0 ? `${(car.engine_cc / 1000).toFixed(1)}л` : null,

@@ -130,7 +130,13 @@ function BrandLogo({ brand }: { brand: (typeof BRANDS)[number] }) {
   );
 }
 
-export function HomeClient({ freshCars }: { freshCars: CatalogCar[] }) {
+export function HomeClient({
+  freshCars,
+  krwRateRub,
+}: {
+  freshCars: CatalogCar[];
+  krwRateRub?: number;
+}) {
   const [activeBanner, setActiveBanner] = useState(0);
   const [countryCode, setCountryCode] = useState("RU");
   const [countryOpen, setCountryOpen] = useState(false);
@@ -149,10 +155,8 @@ export function HomeClient({ freshCars }: { freshCars: CatalogCar[] }) {
     console.log(
       "Страна:",
       selectedCountry.name,
-      "курс:",
-      selectedCountry.rate,
       "пример цены:",
-      Math.round(25_000_000 * selectedCountry.rate).toLocaleString("ru-RU"),
+      calcFullPrice(25_000_000, 1600, selectedCountry.code, 2021, 0, krwRateRub).totalLocal.toLocaleString("ru-RU"),
       selectedCountry.currency,
     );
   }, [selectedCountry]);
@@ -278,6 +282,9 @@ export function HomeClient({ freshCars }: { freshCars: CatalogCar[] }) {
               car.price_krw ?? 0,
               car.engine_cc ?? 0,
               selectedCountry.code,
+              car.year ?? 2021,
+              (car as any).power_hp ?? 0,
+              krwRateRub,
             );
             return (
               <Link key={car.encar_id} href={`/car/${car.encar_id}`}>

@@ -241,7 +241,13 @@ export function CarDetailClient({
 
   const calc =
     typeof car.price_krw === "number"
-      ? calcFullPrice(car.price_krw, car.engine_cc ?? 0, selectedCountry.code)
+      ? calcFullPrice(
+          car.price_krw,
+          car.engine_cc ?? 0,
+          selectedCountry.code,
+          car.year ?? 2021,
+          car.power_hp ?? 0,
+        )
       : null;
   const totalPrice =
     realCalc?.total_rub
@@ -697,7 +703,13 @@ export function CarDetailClient({
               const firstPhoto = item.photos?.[0];
               const itemCalc =
                 typeof item.price_krw === "number"
-                  ? calcFullPrice(item.price_krw, item.engine_cc ?? 0, selectedCountry.code)
+                  ? calcFullPrice(
+                      item.price_krw,
+                      item.engine_cc ?? 0,
+                      selectedCountry.code,
+                      item.year ?? 2021,
+                      item.power_hp ?? 0,
+                    )
                   : null;
 
               return (
