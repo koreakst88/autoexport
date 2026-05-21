@@ -25,18 +25,63 @@ async function getKrwRate(): Promise<number> {
 }
 
 // Утилизационный сбор 2025 для физлиц
-// Базовая ставка 20 000 ₽ × коэффициент по мощности
-function getUtilSbor(powerHp: number): number {
+// Зависит от мощности и возраста авто
+function getUtilSbor(powerHp: number, year: number): number {
   const BASE = 20000
-  let coeff: number
+  const currentYear = new Date().getFullYear()
+  const age = currentYear - year
 
-  if (powerHp <= 90) coeff = 1.67
-  else if (powerHp <= 150) coeff = 6.31
-  else if (powerHp <= 200) coeff = 12.98
-  else if (powerHp <= 300) coeff = 17.57
-  else if (powerHp <= 400) coeff = 35.14
-  else if (powerHp <= 500) coeff = 60.75
-  else coeff = 122.38
+  // Коэффициенты для авто до 3 лет (новые)
+  const COEFF_NEW: Record<string, number> = {
+    '0-90': 5.93,
+    '91-150': 17.07,
+    '151-200': 44.24,
+    '201-300': 140.52,
+    '301-400': 149.44,
+    '401-500': 347.18,
+    '500+': 714.94,
+  }
+
+  // Коэффициенты для авто 3-5 лет
+  const COEFF_35: Record<string, number> = {
+    '0-90': 1.67,
+    '91-150': 6.31,
+    '151-200': 12.98,
+    '201-300': 17.57,
+    '301-400': 35.14,
+    '401-500': 60.75,
+    '500+': 122.38,
+  }
+
+  // Коэффициенты для авто старше 5 лет
+  const COEFF_OLD: Record<string, number> = {
+    '0-90': 1.67,
+    '91-150': 6.31,
+    '151-200': 12.98,
+    '201-300': 17.57,
+    '301-400': 35.14,
+    '401-500': 60.75,
+    '500+': 122.38,
+  }
+
+  function getCoeff(coeffMap: Record<string, number>, hp: number): number {
+    if (hp <= 90) return coeffMap['0-90']
+    if (hp <= 150) return coeffMap['91-150']
+    if (hp <= 200) return coeffMap['151-200']
+    if (hp <= 300) return coeffMap['201-300']
+    if (hp <= 400) return coeffMap['301-400']
+    if (hp <= 500) return coeffMap['401-500']
+    return coeffMap['500+']
+  }
+
+  let coeff: number
+  if (age < 3) {
+    coeff = getCoeff(COEFF_NEW, powerHp)
+  } else if (age <= 5) {
+    coeff = getCoeff(COEFF_35, powerHp)
+  } else {
+    coeff = getCoeff(COEFF_OLD, powerHp)
+  }
 
   return Math.round(BASE * coeff)
 }
@@ -47,44 +92,58 @@ function getCustomsDuty(
   priceKrw: number,
   engineCc: number,
   krwRate: number,
+  year: number,
 ): { duty: number; fees: number } {
-  const USD_RATE = 70.95
   const EUR_RATE = 78.5
+  const USD_RATE = 70.95
   const priceRub = priceKrw * krwRate
   const priceEur = priceRub / EUR_RATE
+  const currentYear = new Date().getFullYear()
+  const age = currentYear - year
 
-  // Ставки таможенной пошлины по объёму двигателя
-  // для авто 3-5 лет (основная часть нашего каталога)
-  let eurPerCc: number
-  let percentRate: number
+  let duty: number
 
-  if (engineCc <= 1000) {
-    eurPerCc = 1.5
-    percentRate = 0.154
-  } else if (engineCc <= 1500) {
-    eurPerCc = 1.7
-    percentRate = 0.154
-  } else if (engineCc <= 1800) {
-    eurPerCc = 2.5
-    percentRate = 0.154
-  } else if (engineCc <= 2300) {
-    eurPerCc = 2.7
-    percentRate = 0.154
-  } else if (engineCc <= 3000) {
-    eurPerCc = 3.0
-    percentRate = 0.154
+  if (age < 3) {
+    // Новые авто: 48% но не менее X евро за см³
+    const eurPerCc =
+      engineCc <= 1000 ? 2.5
+      : engineCc <= 1500 ? 3.5
+      : engineCc <= 1800 ? 3.5
+      : engineCc <= 2300 ? 3.5
+      : engineCc <= 3000 ? 3.5
+      : 3.5
+    const dutyByVolume = engineCc * eurPerCc * EUR_RATE
+    const dutyByValue = priceEur * 0.48 * EUR_RATE
+    duty = Math.round(Math.max(dutyByVolume, dutyByValue))
+  } else if (age <= 5) {
+    // 3-5 лет: по объёму
+    const eurPerCc =
+      engineCc <= 1000 ? 1.5
+      : engineCc <= 1500 ? 1.7
+      : engineCc <= 1800 ? 2.5
+      : engineCc <= 2300 ? 2.7
+      : engineCc <= 3000 ? 3.0
+      : 3.6
+    const dutyByVolume = engineCc * eurPerCc * EUR_RATE
+    const dutyByValue = priceEur * 0.154 * EUR_RATE
+    duty = Math.round(Math.max(dutyByVolume, dutyByValue))
   } else {
-    eurPerCc = 3.6
-    percentRate = 0.154
+    // Старше 5 лет: повышенные ставки
+    const eurPerCc =
+      engineCc <= 1000 ? 3.0
+      : engineCc <= 1500 ? 3.2
+      : engineCc <= 1800 ? 3.5
+      : engineCc <= 2300 ? 4.8
+      : engineCc <= 3000 ? 5.0
+      : 5.7
+    const dutyByVolume = engineCc * eurPerCc * EUR_RATE
+    const dutyByValue = priceEur * 0.2 * EUR_RATE
+    duty = Math.round(Math.max(dutyByVolume, dutyByValue))
   }
 
-  const dutyByVolume = engineCc * eurPerCc * EUR_RATE
-  const dutyByValue = priceEur * percentRate * EUR_RATE
-  const duty = Math.round(Math.max(dutyByVolume, dutyByValue))
-
-  // Таможенные сборы (фиксированные по стоимости авто)
-  let fees = 10500
+  // Таможенные сборы
   const priceUsd = priceRub / USD_RATE
+  let fees = 10500
   if (priceUsd <= 10000) fees = 6187
   else if (priceUsd <= 20000) fees = 10500
   else if (priceUsd <= 40000) fees = 14256
@@ -121,13 +180,9 @@ export async function POST(req: NextRequest) {
       // Брокер + СБКТС + ЭПТС + хранение
       const brokerRub = 90000
       // Таможня
-      const { duty: dutyRub, fees: feesRub } = getCustomsDuty(
-        priceKrw,
-        engineCc,
-        krwRate,
-      )
+      const { duty: dutyRub, fees: feesRub } = getCustomsDuty(priceKrw, engineCc, krwRate, year)
       // Утиль
-      const utilRub = getUtilSbor(powerHp)
+      const utilRub = getUtilSbor(powerHp, year)
 
       const totalRub =
         carPriceRub + freightRub + brokerRub + dutyRub + feesRub + utilRub
@@ -196,4 +251,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Calculation failed' }, { status: 500 })
   }
 }
-
