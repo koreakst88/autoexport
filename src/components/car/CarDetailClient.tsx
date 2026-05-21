@@ -265,17 +265,31 @@ export function CarDetailClient({
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data?.error) setRealCalc(data);
+        // Treat zero/failed parses as invalid and fall back to our local calc.
+        const ok =
+          data &&
+          !data.error &&
+          typeof data.total_rub === "number" &&
+          data.total_rub > 0 &&
+          typeof data.rate_krw_rub === "number" &&
+          data.rate_krw_rub > 0;
+        setRealCalc(ok ? data : null);
       })
       .finally(() => setCalcLoading(false));
   }, [car.encar_id, car.engine_cc, car.first_registration_korea, car.fuel_type, car.power_hp, car.price_krw, car.year, selectedCountry.code]);
 
+  const hasRealRuCalc =
+    selectedCountry.code === "RU" &&
+    !!realCalc &&
+    realCalc.total_rub > 0 &&
+    realCalc.rate_krw_rub > 0;
+
   const totalPrice =
-    selectedCountry.code === "RU" && realCalc
+    hasRealRuCalc
       ? realCalc.total_rub
       : calc?.totalLocal;
 
-  const ruBreakdownReal: BreakdownRow[] | null = realCalc
+  const ruBreakdownReal: BreakdownRow[] | null = hasRealRuCalc
     ? ([
         {
           label: "Авто в Корее",
@@ -558,7 +572,7 @@ export function CarDetailClient({
 
             <div className="border-t border-gray-100 px-3 py-2">
               <p className="text-center text-xs text-gray-400">
-                {selectedCountry.code === "RU" && realCalc
+                {hasRealRuCalc
                   ? `Курс ЦБ: 1000₩ = ${(realCalc.rate_krw_rub * 1000).toFixed(2)}₽ · Расчёт актуален`
                   : "Расчёт приблизительный ±15%"}
               </p>

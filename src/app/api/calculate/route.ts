@@ -61,20 +61,35 @@ export async function POST(req: NextRequest) {
       parseInt((s ?? "0").replace(/[^\d]/g, ""), 10) || 0;
 
     const rate1000 = rateMatch?.[1]?.replace(",", ".") ?? "0";
+    const rate_krw_rub = parseFloat(rate1000) / 1000;
+
+    const car_price_rub = parseNum(priceRuMatch?.[1]);
+    const duty_rub = parseNum(dutyMatch?.[1]);
+    const fees_rub = parseNum(feesMatch?.[1]);
+    const util_rub = parseNum(utilMatch?.[1]);
+    const total_rub = parseNum(totalMatch?.[1]);
+    const freight_rub = freightMatch ? parseNum(freightMatch?.[1]) : 85141;
+    const broker_rub = brokerMatch ? parseNum(brokerMatch?.[1]) : 90000;
+
+    // If we failed to parse meaningful numbers, don't let clients treat it as "valid 0".
+    if (!rate_krw_rub || !total_rub) {
+      return NextResponse.json(
+        { error: "Calculator parse failed" },
+        { status: 503 },
+      );
+    }
 
     return NextResponse.json({
-      rate_krw_rub: parseFloat(rate1000) / 1000,
-      car_price_rub: parseNum(priceRuMatch?.[1]),
-      duty_rub: parseNum(dutyMatch?.[1]),
-      fees_rub: parseNum(feesMatch?.[1]),
-      util_rub: parseNum(utilMatch?.[1]),
-      total_rub: parseNum(totalMatch?.[1]),
-      // Fallbacks (we keep them stable for now)
-      freight_rub: freightMatch ? parseNum(freightMatch?.[1]) : 85141,
-      broker_rub: brokerMatch ? parseNum(brokerMatch?.[1]) : 90000,
+      rate_krw_rub,
+      car_price_rub,
+      duty_rub,
+      fees_rub,
+      util_rub,
+      total_rub,
+      freight_rub,
+      broker_rub,
     });
   } catch {
     return NextResponse.json({ error: "Failed to calculate" }, { status: 500 });
   }
 }
-
