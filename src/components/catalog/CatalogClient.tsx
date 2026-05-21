@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Star } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Star } from "lucide-react";
 import { calcFullPrice, COUNTRIES } from "@/lib/calc";
 import {
   getFavorites,
@@ -15,6 +15,7 @@ import {
   translateFuel,
   translateTransmission,
 } from "@/lib/translations";
+import { useTelegram } from "@/hooks/useTelegram";
 
 export type CatalogCar = {
   encar_id: string;
@@ -110,6 +111,7 @@ type CatalogClientProps = {
 
 export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
   const router = useRouter();
+  const { isInTelegram, showBackButton, hideBackButton } = useTelegram();
   type CountryCode = (typeof COUNTRIES)[number]["code"];
   const [countryCode, setCountryCode] = useState<CountryCode>(COUNTRIES[0].code);
   const [isCountryOpen, setIsCountryOpen] = useState(false);
@@ -130,6 +132,15 @@ export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
 
   const selectedCountry =
     COUNTRIES.find((country) => country.code === countryCode) ?? COUNTRIES[0];
+
+  useEffect(() => {
+    if (!isInTelegram) return;
+    showBackButton(() => {
+      if (window.history.length > 1) router.back();
+      else router.push("/");
+    });
+    return () => hideBackButton();
+  }, [hideBackButton, isInTelegram, router, showBackButton]);
 
   useEffect(() => {
     setFavorites(getFavorites());
@@ -252,7 +263,21 @@ export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
     <main className="min-h-screen bg-gray-50 pb-24 text-gray-950">
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <div className="text-xl font-semibold tracking-tight">AutoExport</div>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) router.back();
+              else router.push("/");
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700"
+            aria-label="Назад"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+
+          <div className="flex-1 text-center text-xl font-semibold tracking-tight">
+            AutoExport
+          </div>
 
           <div className="relative">
             <button

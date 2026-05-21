@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { useTelegram } from "@/hooks/useTelegram";
 
 type BodyType = "crossover" | "sedan" | "minivan";
@@ -74,7 +76,8 @@ function OptionButton({
 }
 
 export function QuizClient() {
-  const { user } = useTelegram();
+  const router = useRouter();
+  const { user, isInTelegram, showBackButton, hideBackButton } = useTelegram();
   const [step, setStep] = useState(1);
   const [bodyType, setBodyType] = useState<BodyType | null>(null);
   const [budgetKey, setBudgetKey] = useState<BudgetKey | null>(null);
@@ -105,6 +108,16 @@ export function QuizClient() {
   function goBack() {
     setStep((s) => Math.max(1, s - 1));
   }
+
+  useEffect(() => {
+    if (!isInTelegram) return;
+    showBackButton(() => {
+      if (step > 1) goBack();
+      else if (window.history.length > 1) router.back();
+      else router.push("/");
+    });
+    return () => hideBackButton();
+  }, [hideBackButton, isInTelegram, router, showBackButton, step]);
 
   async function submit() {
     if (!bodyType || !budgetKey || !budgetUsd || !country) return;
@@ -165,9 +178,19 @@ export function QuizClient() {
       <div className="mx-auto max-w-md">
         <div className="mb-6">
           <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-semibold text-gray-900">
-              Квиз AutoExport
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (step > 1) goBack();
+                else if (window.history.length > 1) router.back();
+                else router.push("/");
+              }}
+              className="flex items-center gap-2 text-sm font-semibold text-gray-700"
+              aria-label="Назад"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Назад
+            </button>
             <div className="text-xs font-medium text-gray-500">
               Шаг {step} из {STEPS_TOTAL}
             </div>
@@ -179,16 +202,6 @@ export function QuizClient() {
             />
           </div>
         </div>
-
-        {step > 1 ? (
-          <button
-            type="button"
-            onClick={goBack}
-            className="mb-4 text-sm font-semibold text-gray-700"
-          >
-            ← Назад
-          </button>
-        ) : null}
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           {step === 1 ? (

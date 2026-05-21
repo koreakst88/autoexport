@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { calcFullPrice, type CalcResult } from "@/lib/calc";
+import { getFavorites, toggleFavorite } from "@/lib/favorites";
 import {
   translateBadge,
   translateFuel,
@@ -197,7 +198,7 @@ export function CarDetailClient({
   const [countryCode, setCountryCode] = useState("RU");
   const [countryOpen, setCountryOpen] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [brokenPhoto, setBrokenPhoto] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
 
@@ -222,6 +223,7 @@ export function CarDetailClient({
   useEffect(() => {
     setActivePhoto(0);
     setBrokenPhoto(false);
+    setFavorites(getFavorites());
   }, [car.encar_id]);
 
   useEffect(() => {
@@ -265,19 +267,15 @@ export function CarDetailClient({
           <button
             type="button"
             onClick={() => {
-              setFavorites((current) => {
-                const next = new Set(current);
-                if (next.has(car.encar_id)) next.delete(car.encar_id);
-                else next.add(car.encar_id);
-                return next;
-              });
+              toggleFavorite(car.encar_id);
+              setFavorites(getFavorites());
             }}
             className="flex items-center gap-2 text-sm font-semibold text-gray-700"
             aria-label="Избранное"
           >
             <Star
               className={`h-5 w-5 ${
-                favorites.has(car.encar_id)
+                favorites.includes(car.encar_id)
                   ? "fill-yellow-400 text-yellow-500"
                   : "text-gray-400"
               }`}
