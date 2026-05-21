@@ -574,9 +574,7 @@ export function CarDetailClient({
           <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
             <span className="text-xs text-gray-500">Стоимость в Корее:</span>
             <span className="text-xs font-medium text-gray-900 text-right whitespace-nowrap">
-              {typeof car.price_krw === "number" && calc && priceMan
-                ? `${priceMan}만 ₩ · ${toLocal(calc.carPriceRub).toLocaleString("ru-RU")} ${selectedCountry.currency}`
-                : `${formatKrw(car.price_krw)} ₩`}
+              {typeof car.price_krw === "number" ? `${formatKrw(car.price_krw)} ₩` : "—"}
             </span>
           </div>
         </div>
