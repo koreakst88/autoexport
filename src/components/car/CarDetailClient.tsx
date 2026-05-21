@@ -154,10 +154,11 @@ function getPriceBreakdown(result: CalcResult, car: CarDetailCar, countryCode: s
   const rate = rateMap[countryCode] ?? 1;
   const toLocal = (rub: number) => Math.round(rub * rate);
   const priceKrw = car.price_krw ?? 0;
+  const priceMan = (priceKrw / 10000).toFixed(1);
 
   if (countryCode === "RU") {
     return [
-      { label: "Авто в Корее", value: `${priceKrw.toLocaleString("ru-RU")} ₩ (${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur})` },
+      { label: "Авто в Корее", value: `${priceMan}만 ₩ · ${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur}` },
       { label: "Фрахт до Владивостока", value: `${toLocal(result.koreaExpensesRub).toLocaleString("ru-RU")} ${cur}` },
       { label: "Сбор Encar", value: `${toLocal(23540).toLocaleString("ru-RU")} ${cur}` },
       { label: "CFR Владивосток", value: `${toLocal(result.carPriceRub + result.koreaExpensesRub + 23540).toLocaleString("ru-RU")} ${cur}`, bold: true },
@@ -171,7 +172,7 @@ function getPriceBreakdown(result: CalcResult, car: CarDetailCar, countryCode: s
 
   if (countryCode === "KZ") {
     return [
-      { label: "Авто в Корее", value: `${priceKrw.toLocaleString("ru-RU")} ₩ (${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur})` },
+      { label: "Авто в Корее", value: `${priceMan}만 ₩ · ${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur}` },
       { label: "Доставка до Алматы", value: `${toLocal(result.koreaExpensesRub).toLocaleString("ru-RU")} ${cur}` },
       { label: "Сбор Encar", value: `${toLocal(23540).toLocaleString("ru-RU")} ${cur}` },
       { label: "Таможня ЕАЭС (15%)", value: `${toLocal(result.customsDutyRub).toLocaleString("ru-RU")} ${cur}` },
@@ -183,7 +184,7 @@ function getPriceBreakdown(result: CalcResult, car: CarDetailCar, countryCode: s
 
   if (countryCode === "KG") {
     return [
-      { label: "Авто в Корее", value: `${priceKrw.toLocaleString("ru-RU")} ₩ (${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur})` },
+      { label: "Авто в Корее", value: `${priceMan}만 ₩ · ${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur}` },
       { label: "Доставка до Бишкека", value: `${toLocal(result.koreaExpensesRub).toLocaleString("ru-RU")} ${cur}` },
       { label: "Сбор Encar", value: `${toLocal(23540).toLocaleString("ru-RU")} ${cur}` },
       { label: "Таможня (11%)", value: `${toLocal(result.customsDutyRub).toLocaleString("ru-RU")} ${cur}` },
@@ -194,7 +195,7 @@ function getPriceBreakdown(result: CalcResult, car: CarDetailCar, countryCode: s
   }
 
   return [
-    { label: "Авто в Корее", value: `${priceKrw.toLocaleString("ru-RU")} ₩ (${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur})` },
+    { label: "Авто в Корее", value: `${priceMan}만 ₩ · ${toLocal(result.carPriceRub).toLocaleString("ru-RU")} ${cur}` },
     { label: "Доставка до Ташкента", value: `${toLocal(result.koreaExpensesRub).toLocaleString("ru-RU")} ${cur}` },
     { label: "Сбор Encar", value: `${toLocal(23540).toLocaleString("ru-RU")} ${cur}` },
     { label: "Таможня + акциз (22%)", value: `${toLocal(result.customsDutyRub).toLocaleString("ru-RU")} ${cur}` },
@@ -278,7 +279,7 @@ export function CarDetailClient({
   const similarCards = similarCars.filter((item) => item.encar_id !== car.encar_id);
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-28 text-gray-950">
+    <main className="min-h-screen bg-gray-50 text-gray-950">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex-1 truncate text-center text-sm font-semibold text-gray-900">
@@ -306,18 +307,18 @@ export function CarDetailClient({
             />
           </button>
         </div>
-        <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-500">
-          <div className="mx-auto flex max-w-6xl flex-wrap gap-x-6 gap-y-1">
-            <span>Дата добавления: {formatDateDot(car.registered_at_encar ?? car.created_at ?? null)}</span>
-            <span>Дата изменения: {updatedAt}</span>
-          </div>
+        <div className="flex gap-3 border-t border-gray-100 bg-white px-3 py-2">
+          <span className="text-xs text-gray-400">
+            Дата добавления: {formatDateDot(car.registered_at_encar ?? car.created_at ?? null)}
+          </span>
+          <span className="text-xs text-gray-400">Дата изменения: {updatedAt}</span>
         </div>
       </header>
 
       <section className="bg-gray-900">
-        <div className="mx-auto max-w-6xl px-4 py-4">
+        <div className="mx-auto max-w-6xl px-3 py-3">
           <div className="relative overflow-hidden rounded-2xl bg-gray-800">
-            <div className="relative h-[360px] w-full bg-gray-900 sm:h-[460px]">
+            <div className="relative h-52 w-full bg-gray-900 sm:h-[360px] md:h-[460px]">
               {activeSrc && !brokenPhoto ? (
                 <img
                   src={activeSrc}
@@ -366,7 +367,7 @@ export function CarDetailClient({
             </div>
 
             {photos.length > 0 ? (
-              <div className="grid grid-cols-4 gap-2 border-t border-white/10 bg-gray-900 p-3">
+              <div className="flex gap-2 overflow-x-auto border-t border-white/10 bg-gray-900 p-3">
                 {photos.slice(0, 4).map((src, idx) => {
                   const isMore = idx === 3 && photos.length > 4;
                   const extraCount = photos.length - 4;
@@ -375,13 +376,13 @@ export function CarDetailClient({
                       key={`${src}-${idx}`}
                       type="button"
                       onClick={() => setActivePhoto(idx)}
-                      className={`relative overflow-hidden rounded-lg border ${
+                      className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg border ${
                         idx === activePhoto ? "border-white" : "border-transparent"
                       }`}
                     >
-                      <img src={src} alt="" className="h-20 w-full object-cover opacity-90" />
+                      <img src={src} alt="" className="h-full w-full object-cover opacity-90" />
                       {isMore ? (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-semibold text-white">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-xs font-semibold text-white">
                           +{extraCount} фото
                         </div>
                       ) : null}
@@ -394,8 +395,8 @@ export function CarDetailClient({
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-5">
-        <div className="mx-0 mt-0">
+      <section className="mx-auto max-w-6xl px-0 py-0">
+        <div className="mx-3 mt-3">
           <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
             <div className="flex items-start justify-between gap-4 px-4 py-4">
               <div>
@@ -465,14 +466,12 @@ export function CarDetailClient({
                 {getPriceBreakdown(calc, car, selectedCountry.code).map((row, idx, arr) => (
                   <div
                     key={`${row.label}-${idx}`}
-                    className={`flex items-center justify-between px-4 py-2.5 ${
+                    className={`flex justify-between items-center px-3 py-2 ${
                       idx < arr.length - 1 ? "border-b border-gray-100" : ""
                     } ${row.bold ? "bg-white" : ""}`}
                   >
                     <span
-                      className={`text-sm flex-shrink-0 mr-2 ${
-                        row.bold ? "font-semibold text-gray-900" : "text-gray-500"
-                      }`}
+                      className={`text-sm flex-shrink-0 mr-2 ${row.bold ? "font-semibold text-gray-900" : "text-gray-500"}`}
                     >
                       {row.label}
                     </span>
@@ -500,56 +499,54 @@ export function CarDetailClient({
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4">
-        <div className="grid gap-x-6 gap-y-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:grid-cols-2">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Статус:</span>
-            <span className="font-semibold text-gray-900">
+      <section className="mx-auto max-w-6xl px-0">
+        <div className="mx-3 mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Статус:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">
               {car.is_available ? "В продаже ✅" : "Недоступно"}
             </span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Цвет:</span>
-            <span className="font-semibold text-gray-900">
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Цвет:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">
               {displayColor(car.color)}
               <span
-                className={`ml-1 inline-block h-4 w-4 rounded-full align-middle ${
+                className={`ml-1 inline-block h-3.5 w-3.5 rounded-full align-middle ${
                   COLOR_CIRCLES[displayColor(car.color)] ?? "bg-gray-200"
                 }`}
               />
             </span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Дата рег. в Корее:</span>
-            <span className="font-semibold text-gray-900">{regKorea}</span>
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Дата рег. в Корее:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">{regKorea}</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Поколение:</span>
-            <span className="font-semibold text-gray-900">{car.model ?? "—"}</span>
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Поколение:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">{car.model ?? "—"}</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Комплектация:</span>
-            <span className="font-semibold text-gray-900">{badgeText || "—"}</span>
+          {car.badge ? (
+            <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+              <span className="text-xs text-gray-500">Комплектация:</span>
+              <span className="text-xs font-medium text-gray-900 text-right">{badgeText || "—"}</span>
+            </div>
+          ) : null}
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Пробег:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">{formatNumber(car.mileage)} км</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Пробег:</span>
-            <span className="font-semibold text-gray-900">{formatNumber(car.mileage)} км</span>
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Двигатель:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">{engineDisplay}</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Двигатель:</span>
-            <span className="font-semibold text-gray-900">
-              {engineDisplay}
-            </span>
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">КПП:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">{displayTransmission}</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">КПП:</span>
-            <span className="font-semibold text-gray-900">
-              {displayTransmission}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Привод:</span>
-            <span className="font-semibold text-gray-900">
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Привод:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">
               {car.drive_type ?? parseDriveType(car.badge) ?? parseDriveType(car.badge_detail) ?? "—"}
             </span>
           </div>
@@ -633,7 +630,9 @@ export function CarDetailClient({
         </section>
       ) : null}
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-100 bg-white p-3">
+      <div className="h-28" />
+
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto flex max-w-6xl gap-3">
           <button
             type="button"
