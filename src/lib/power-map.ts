@@ -12,21 +12,26 @@ const POWER_MAP: PowerMap = {
   // Hyundai Tucson
   'hyundai_tucson_1598': { power: 150, note: '1.6 T-GDi' },
   'hyundai_tucson_1999': { power: 186, note: '2.0 MPI' },
+  'hyundai_tucson_1998': { power: 186, note: '2.0 MPI' },
+  'hyundai_tucson_2151': { power: 186, note: '2.2 CRDi' },
   'hyundai_tucson_2199': { power: 186, note: '2.2 CRDi' },
 
   // Hyundai Santa Fe
   'hyundai_santafe_1598': { power: 180, note: '1.6 T-GDi HEV' },
   'hyundai_santafe_1999': { power: 197, note: '2.0 T-GDi' },
+  'hyundai_santafe_2151': { power: 202, note: '2.2 CRDi' },
   'hyundai_santafe_2199': { power: 202, note: '2.2 CRDi' },
 
   // Hyundai Grandeur
   'hyundai_grandeur_2497': { power: 202, note: '2.5 GDi' },
   'hyundai_grandeur_2999': { power: 248, note: '3.0 GDi' },
   'hyundai_grandeur_2359': { power: 180, note: '2.4 HEV' },
+  'hyundai_grandeur_2398': { power: 180, note: '2.4 HEV' },
 
   // Hyundai Sonata
   'hyundai_sonata_1598': { power: 180, note: '1.6 T-GDi' },
   'hyundai_sonata_1999': { power: 160, note: '2.0 MPI' },
+  'hyundai_sonata_1998': { power: 160, note: '2.0 MPI' },
   'hyundai_sonata_2359': { power: 180, note: '2.4 HEV' },
 
   // Hyundai Elantra
@@ -41,8 +46,11 @@ const POWER_MAP: PowerMap = {
   'hyundai_venue_1591': { power: 123, note: '1.6 MPI' },
 
   // Kia Sportage
+  'kia_sportage_1598': { power: 180, note: '1.6 T-GDi' },
   'kia_sportage_1591': { power: 177, note: '1.6 T-GDi' },
   'kia_sportage_1999': { power: 150, note: '2.0 MPI' },
+  'kia_sportage_1998': { power: 150, note: '2.0 MPI' },
+  'kia_sportage_2151': { power: 202, note: '2.2 CRDi' },
   'kia_sportage_2199': { power: 202, note: '2.2 CRDi' },
 
   // Kia Sorento
@@ -51,17 +59,22 @@ const POWER_MAP: PowerMap = {
   'kia_sorento_2199': { power: 202, note: '2.2 CRDi' },
 
   // Kia Carnival
-  'kia_carnival_2199': { power: 202, note: '2.2 CRDi' },
-  'kia_carnival_3497': { power: 272, note: '3.5 MPI' },
+  'kia_carnival_2199': { power: 202, note: '2.2 CRDi дизель' },
+  'kia_carnival_2151': { power: 202, note: '2.2 CRDi дизель' },
+  'kia_carnival_3470': { power: 272, note: '3.5 MPI бензин' },
+  'kia_carnival_3497': { power: 272, note: '3.5 MPI бензин' },
   'kia_carnival_1598': { power: 180, note: '1.6 T-GDi HEV' },
 
   // Kia Seltos
+  'kia_seltos_1598': { power: 177, note: '1.6 T-GDi' },
   'kia_seltos_1591': { power: 177, note: '1.6 T-GDi' },
   'kia_seltos_1999': { power: 150, note: '2.0 MPI' },
+  'kia_seltos_1998': { power: 150, note: '2.0 MPI' },
 
   // Kia K5
   'kia_k5_1598': { power: 180, note: '1.6 T-GDi' },
   'kia_k5_1999': { power: 160, note: '2.0 MPI' },
+  'kia_k5_1998': { power: 160, note: '2.0 MPI' },
   'kia_k5_2497': { power: 202, note: '2.5 GDi' },
 
   // Kia K8
@@ -91,6 +104,7 @@ const POWER_MAP: PowerMap = {
 
   // KGM Rexton
   'kgm_rexton_1998': { power: 177, note: '2.0 e-XDi' },
+  'kgm_rexton_2157': { power: 181, note: '2.2 e-XDi' },
 
   // KGM Torres
   'kgm_torres_1497': { power: 170, note: '1.5 T-GDi' },

@@ -11,7 +11,7 @@ const dateFrom = ninetyDaysAgo.toISOString().slice(0, 10).replace(/-/g, "");
 const ENCAR_FILTER =
   "(And.Hidden.N._.CarType.Y._.Year.range(201900..)._.Mileage.range(..100000)._.Price.range(700..3000).)";
 const ENCAR_PAGE_SIZE = 50;
-const ENCAR_MAX_PAGES = 5;
+const ENCAR_MAX_PAGES = 7;
 
 const ENCAR_HEADERS = {
   "User-Agent":
@@ -227,9 +227,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-let inspectionErrorLogCount = 0;
-const INSPECTION_ERROR_LOG_LIMIT = 5;
-
 function buildEncarUrl(offset) {
   const query = encodeURIComponent(ENCAR_FILTER);
   // В API Encar валидное имя сортировки для "самые новые" — CreatedDate.
@@ -419,53 +416,26 @@ function parseKoreaRegDate(yearField) {
   }
   return null;
 }
-
-function formatInspectionDate(dateStr) {
-  if (!dateStr) return null;
-  if (dateStr.length === 8) {
-    return `${dateStr.slice(4, 6)}.${dateStr.slice(0, 4)}`;
-  }
-  return dateStr;
-}
-
-async function fetchInspectionData(vehicleId) {
+async function fetchVehicleDetail(vehicleId) {
   try {
-    const url = `https://api.encar.com/v1/readside/inspection/vehicle/${vehicleId}`;
+    const url = `https://api.encar.com/v1/readside/vehicle/${vehicleId}`;
     const res = await fetch(url, { headers: ENCAR_HEADERS });
-
-    if (!res.ok) {
-      if (inspectionErrorLogCount < INSPECTION_ERROR_LOG_LIMIT) {
-        const text = await res.text();
-        console.log(
-          `Inspection ${res.status} | ID ${vehicleId} | ${text.slice(0, 100)}`,
-        );
-        inspectionErrorLogCount += 1;
-      }
-
-      return {};
-    }
-
+    if (!res.ok) return {};
     const data = await res.json();
-    const detail = data?.master?.detail ?? {};
 
-    const colorRaw = detail?.colorType;
-    const colorStr =
-      typeof colorRaw === "object" && colorRaw !== null
-        ? colorRaw.title ?? null
-        : colorRaw;
-
-    const transmissionRaw = detail?.transmissionType;
-    const transmissionStr =
-      typeof transmissionRaw === "object" && transmissionRaw !== null
-        ? transmissionRaw.title ?? null
-        : transmissionRaw;
+    const spec = data?.spec ?? {};
+    const manage = data?.manage ?? {};
+    const category = data?.category ?? {};
 
     return {
-      registeredAt: data?.master?.registrationDate ?? null,
-      color: translateColorKr(colorStr),
-      vin: detail?.vin ?? null,
-      firstRegistrationKorea: detail?.firstRegistrationDate ?? null,
-      transmission: transmissionStr ?? null,
+      displacement: spec.displacement ?? null,
+      color: translateColorKr(spec.colorName ?? null),
+      seats: spec.seatCount ?? null,
+      body_type_kr: spec.bodyName ?? null,
+      grade_english: category.gradeEnglishName ?? null,
+      registered_at_encar: manage.registDateTime ?? null,
+      vehicle_no: data.vehicleNo ?? null,
+      transmission: spec.transmissionName ?? null,
     };
   } catch {
     return {};
@@ -486,33 +456,15 @@ async function fetchOptions(vehicleId) {
   }
 }
 
-async function fetchFemDetail(vehicleId) {
-  try {
-    const url = `https://fem.encar.com/cars/detail/${vehicleId}`;
-    const res = await fetch(url, { headers: ENCAR_HEADERS });
-    if (!res.ok) return {};
-    const html = await res.text();
-
-    const colorMatch = html.match(/색상:([^,<"]+)/);
-    const colorKr = colorMatch?.[1]?.trim() ?? null;
-    return {
-      color: translateColorKr(colorKr),
-    };
-  } catch {
-    return {};
-  }
-}
-
 async function mapCar(car) {
   await sleep(300);
-  const inspection = await fetchInspectionData(car.Id);
+  const detail = await fetchVehicleDetail(car.Id);
   await sleep(300);
   const options = await fetchOptions(car.Id);
-  const femData = await fetchFemDetail(car.Id);
   await sleep(500);
   const listingUpdatedAt = car.Photos?.[0]?.updatedDate ?? null;
   const registeredAt =
-    listingUpdatedAt ?? inspection.registeredAt ?? new Date().toISOString();
+    detail.registered_at_encar ?? listingUpdatedAt ?? new Date().toISOString();
 
   return {
     encar_id: String(car.Id),
@@ -522,27 +474,24 @@ async function mapCar(car) {
     body_type: getBodyType(car.Model),
     mileage: car.Mileage,
     engine_cc:
-      (car.Displacement && car.Displacement > 0
-        ? normalizeEngineCc(car.Displacement)
-        : 0) ||
+      normalizeEngineCc(detail.displacement) ||
+      (car.Displacement && car.Displacement > 0 ? car.Displacement : 0) ||
       parseEngineFromBadge(car.Badge, translateModel(car.Model), car.FuelType),
     fuel_type: car.FuelType ?? "gasoline",
-    transmission: inspection.transmission ?? car.Transmission ?? "auto",
-    color: inspection.color ?? femData.color ?? null,
+    transmission: detail.transmission ?? car.Transmission ?? null,
+    color: detail.color ?? null,
     has_accident: car.HasAccident ?? false,
     price_krw: car.Price * 10000,
     photos: buildPhotos(car),
     raw_url: `https://www.encar.com/dc/dc_cardetailview.do?carid=${car.Id}`,
-    vin: inspection.vin ?? null,
-    first_registration_korea: inspection.firstRegistrationKorea
-      ? formatInspectionDate(inspection.firstRegistrationKorea)
-      : parseKoreaRegDate(car.Year),
+    vin: null,
+    first_registration_korea: parseKoreaRegDate(car.Year),
     power_hp: null,
-    seats: null,
+    seats: detail.seats ?? null,
     options,
     drive_type: parseDriveType(car.Badge) ?? parseDriveType(car.BadgeDetail) ?? null,
     badge: car.Badge ?? null,
-    badge_detail: car.BadgeDetail ?? null,
+    badge_detail: detail.grade_english ?? car.BadgeDetail ?? null,
     // Для "свежести" используем дату обновления фото (если есть), иначе текущую.
     modified_at_encar: listingUpdatedAt ?? new Date().toISOString(),
     registered_at_encar: registeredAt,
@@ -677,18 +626,16 @@ async function main() {
   console.log(`   Ошибок: ${errorCount}`);
   console.log(`\nТоп брендов:`, brandStats);
   console.log(`Модели:`, modelStats);
-  console.log(`\nПример первых 3 авто:`);
+  console.log(`\nПример данных:`);
   console.log(
     JSON.stringify(
       sampleCars.map((c) => ({
         model: c.model,
-        badge: c.badge,
-        drive_type: c.drive_type,
-        color: c.color,
-        vin: c.vin,
         engine_cc: c.engine_cc,
-        photo0: c.photos?.[0] ?? null,
-        options_count: c.options?.length ?? 0,
+        color: c.color,
+        seats: c.seats,
+        registered_at_encar: c.registered_at_encar,
+        badge_detail: c.badge_detail,
       })),
       null,
       2,
