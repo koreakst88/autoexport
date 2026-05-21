@@ -3,24 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { calcFullPrice, type CalcResult } from "@/lib/calc";
 import {
   translateBadge,
   translateFuel,
   translateTransmission,
 } from "@/lib/translations";
-
-type TelegramBackButton = {
-  show?: () => void;
-  hide?: () => void;
-  onClick?: (cb: () => void) => void;
-  offClick?: (cb: () => void) => void;
-};
-
-type TelegramWebApp = {
-  BackButton?: TelegramBackButton;
-};
+import { useTelegram } from "@/hooks/useTelegram";
 
 export type CarDetailCar = {
   encar_id: string;
@@ -114,11 +104,6 @@ function displayColor(color: string | null): string {
   return color;
 }
 
-function formatRub(value: number | null | undefined) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "—";
-  return value.toLocaleString("ru-RU");
-}
-
 function parseDriveType(badge: string | null) {
   if (!badge) return null;
   if (badge.includes("4WD") || badge.includes("AWD")) return "4WD";
@@ -136,11 +121,6 @@ function formatKrw(value: number | null | undefined) {
 function formatNumber(value: number | null | undefined) {
   if (typeof value !== "number" || Number.isNaN(value)) return "—";
   return value.toLocaleString("ru-RU");
-}
-
-function formatPriceKrwToRub(priceKrw: number | null) {
-  if (typeof priceKrw !== "number") return 0;
-  return Math.round(priceKrw * 0.0535);
 }
 
 function getPriceBreakdown(result: CalcResult, car: CarDetailCar, countryCode: string) {
@@ -213,6 +193,7 @@ export function CarDetailClient({
   similarCars?: CarDetailCar[];
 }) {
   const router = useRouter();
+  const { isInTelegram, showBackButton, hideBackButton } = useTelegram();
   const [countryCode, setCountryCode] = useState("RU");
   const [countryOpen, setCountryOpen] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -237,12 +218,6 @@ export function CarDetailClient({
     typeof car.price_krw === "number"
       ? calcFullPrice(car.price_krw, car.engine_cc ?? 0, selectedCountry.code)
       : null;
-  const carPriceRub = formatPriceKrwToRub(car.price_krw);
-  const rubToLocalRate: Record<string, number> = { RU: 1, KZ: 6.5, KG: 0.862, UZ: 127 };
-  const toLocal = (rub: number) =>
-    Math.round(rub * (rubToLocalRate[selectedCountry.code] ?? 1));
-  const priceMan =
-    typeof car.price_krw === "number" ? (car.price_krw / 10000).toFixed(1) : null;
 
   useEffect(() => {
     setActivePhoto(0);
@@ -253,30 +228,15 @@ export function CarDetailClient({
     setBrokenPhoto(false);
   }, [activePhoto]);
 
-  // Telegram Mini App: replace the default "Close" with a real Back button.
+  // Telegram Mini App: use native back button.
   useEffect(() => {
-    const tg = (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } })
-      ?.Telegram?.WebApp;
-    const back = tg?.BackButton;
-    if (!back) return;
-
-    const handler = () => {
+    if (!isInTelegram) return;
+    showBackButton(() => {
       if (window.history.length > 1) router.back();
       else router.push("/catalog");
-    };
-
-    try {
-      back.show?.();
-      back.onClick?.(handler);
-    } catch {}
-
-    return () => {
-      try {
-        back.offClick?.(handler);
-        back.hide?.();
-      } catch {}
-    };
-  }, [router]);
+    });
+    return () => hideBackButton();
+  }, [hideBackButton, isInTelegram, router, showBackButton]);
 
   const prevPhoto = () => setActivePhoto((p) => Math.max(0, p - 1));
   const nextPhoto = () => setActivePhoto((p) => Math.min(photos.length - 1, p + 1));
@@ -287,6 +247,18 @@ export function CarDetailClient({
     <main className="min-h-screen bg-gray-50 text-gray-950">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          {!isInTelegram ? (
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-sm font-semibold text-gray-700"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Назад
+            </button>
+          ) : (
+            <div className="w-20" />
+          )}
           <div className="flex-1 truncate text-center text-sm font-semibold text-gray-900">
             {car.brand} {car.model} {car.year}
           </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useTelegram } from "@/hooks/useTelegram";
 
 type BodyType = "crossover" | "sedan" | "minivan";
 type BudgetKey = "lt10" | "10_15" | "15_20" | "gt20";
@@ -73,6 +74,7 @@ function OptionButton({
 }
 
 export function QuizClient() {
+  const { user } = useTelegram();
   const [step, setStep] = useState(1);
   const [bodyType, setBodyType] = useState<BodyType | null>(null);
   const [budgetKey, setBudgetKey] = useState<BudgetKey | null>(null);
@@ -80,7 +82,14 @@ export function QuizClient() {
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const tgUsername = "@username";
+  const tgUsername = user?.username ? `@${user.username}` : "@unknown";
+
+  useEffect(() => {
+    if (!user) return;
+    const fullName = `${user.first_name}${user.last_name ? ` ${user.last_name}` : ""}`.trim();
+    if (!fullName) return;
+    setName((current) => (current.trim() ? current : fullName));
+  }, [user]);
 
   const progress = useMemo(() => (step / STEPS_TOTAL) * 100, [step]);
 
@@ -285,4 +294,3 @@ export function QuizClient() {
     </main>
   );
 }
-
