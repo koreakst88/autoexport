@@ -24,66 +24,48 @@ async function getKrwRate(): Promise<number> {
   return 0.0472 // fallback на случай недоступности ЦБ
 }
 
+function getCarAge(year: number, month: number = 6): number {
+  const now = new Date()
+  const regDate = new Date(year, month - 1, 1)
+  const diffMs = now.getTime() - regDate.getTime()
+  return diffMs / (1000 * 60 * 60 * 24 * 365.25)
+}
+
 // Утилизационный сбор 2025 для физлиц
 // Зависит от мощности и возраста авто
-function getUtilSbor(powerHp: number, year: number): number {
+function getUtilSbor(powerHp: number, year: number, month: number = 6): number {
   const BASE = 20000
-  const currentYear = new Date().getFullYear()
-  const age = currentYear - year
+  const ageYears = getCarAge(year, month)
 
-  // Коэффициенты для авто до 3 лет (новые)
-  const COEFF_NEW: Record<string, number> = {
-    '0-90': 5.93,
-    '91-150': 17.07,
-    '151-200': 44.24,
-    '201-300': 140.52,
-    '301-400': 149.44,
-    '401-500': 347.18,
-    '500+': 714.94,
+  function coeff(hp: number, isNew: boolean, isOld: boolean): number {
+    if (isNew) {
+      if (hp <= 90) return 5.93
+      if (hp <= 150) return 17.07
+      if (hp <= 200) return 44.24
+      if (hp <= 300) return 140.52
+      if (hp <= 400) return 149.44
+      if (hp <= 500) return 347.18
+      return 714.94
+    } else if (isOld) {
+      if (hp <= 90) return 1.67
+      if (hp <= 150) return 6.31
+      if (hp <= 200) return 12.98
+      if (hp <= 300) return 91.92
+      if (hp <= 400) return 107.44
+      if (hp <= 500) return 234.21
+      return 469.42
+    } else {
+      if (hp <= 90) return 1.67
+      if (hp <= 150) return 6.31
+      if (hp <= 200) return 12.98
+      if (hp <= 300) return 17.57
+      if (hp <= 400) return 35.14
+      if (hp <= 500) return 60.75
+      return 122.38
+    }
   }
 
-  // Коэффициенты для авто 3-5 лет
-  const COEFF_35: Record<string, number> = {
-    '0-90': 1.67,
-    '91-150': 6.31,
-    '151-200': 12.98,
-    '201-300': 17.57,
-    '301-400': 35.14,
-    '401-500': 60.75,
-    '500+': 122.38,
-  }
-
-  // Коэффициенты для авто старше 5 лет
-  const COEFF_OLD: Record<string, number> = {
-    '0-90': 1.67,
-    '91-150': 6.31,
-    '151-200': 12.98,
-    '201-300': 17.57,
-    '301-400': 35.14,
-    '401-500': 60.75,
-    '500+': 122.38,
-  }
-
-  function getCoeff(coeffMap: Record<string, number>, hp: number): number {
-    if (hp <= 90) return coeffMap['0-90']
-    if (hp <= 150) return coeffMap['91-150']
-    if (hp <= 200) return coeffMap['151-200']
-    if (hp <= 300) return coeffMap['201-300']
-    if (hp <= 400) return coeffMap['301-400']
-    if (hp <= 500) return coeffMap['401-500']
-    return coeffMap['500+']
-  }
-
-  let coeff: number
-  if (age < 3) {
-    coeff = getCoeff(COEFF_NEW, powerHp)
-  } else if (age <= 5) {
-    coeff = getCoeff(COEFF_35, powerHp)
-  } else {
-    coeff = getCoeff(COEFF_OLD, powerHp)
-  }
-
-  return Math.round(BASE * coeff)
+  return Math.round(BASE * coeff(powerHp, ageYears < 3, ageYears >= 5))
 }
 
 // Таможенная пошлина РФ для физлиц (авто 3-5 лет из Кореи)
@@ -93,17 +75,17 @@ function getCustomsDuty(
   engineCc: number,
   krwRate: number,
   year: number,
+  month: number = 6,
 ): { duty: number; fees: number } {
   const EUR_RATE = 78.5
   const USD_RATE = 70.95
   const priceRub = priceKrw * krwRate
   const priceEur = priceRub / EUR_RATE
-  const currentYear = new Date().getFullYear()
-  const age = currentYear - year
+  const ageYears = getCarAge(year, month)
 
   let duty: number
 
-  if (age < 3) {
+  if (ageYears < 3) {
     // Новые авто: 48% но не менее X евро за см³
     const eurPerCc =
       engineCc <= 1000 ? 2.5
@@ -115,7 +97,7 @@ function getCustomsDuty(
     const dutyByVolume = engineCc * eurPerCc * EUR_RATE
     const dutyByValue = priceEur * 0.48 * EUR_RATE
     duty = Math.round(Math.max(dutyByVolume, dutyByValue))
-  } else if (age <= 5) {
+  } else if (ageYears <= 5) {
     // 3-5 лет: по объёму
     const eurPerCc =
       engineCc <= 1000 ? 1.5
@@ -159,6 +141,7 @@ export async function POST(req: NextRequest) {
     const priceKrw = Number(body.price_krw) || 0
     const engineCc = Number(body.engine_cc) || 1600
     const year = Number(body.year) || new Date().getFullYear()
+    const month = Number(body.month) || 6
     const brand = body.brand ?? ''
     const model = body.model ?? ''
     const country = body.country ?? 'RU'
@@ -180,9 +163,15 @@ export async function POST(req: NextRequest) {
       // Брокер + СБКТС + ЭПТС + хранение
       const brokerRub = 90000
       // Таможня
-      const { duty: dutyRub, fees: feesRub } = getCustomsDuty(priceKrw, engineCc, krwRate, year)
+      const { duty: dutyRub, fees: feesRub } = getCustomsDuty(
+        priceKrw,
+        engineCc,
+        krwRate,
+        year,
+        month,
+      )
       // Утиль
-      const utilRub = getUtilSbor(powerHp, year)
+      const utilRub = getUtilSbor(powerHp, year, month)
 
       const totalRub =
         carPriceRub + freightRub + brokerRub + dutyRub + feesRub + utilRub
