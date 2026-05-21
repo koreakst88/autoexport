@@ -296,30 +296,69 @@ function parseDriveType(badge) {
   return null;
 }
 
-function parseEngineFromBadge(badge) {
-  if (!badge) return 0;
-  // Паттерн 1: число с точкой + единица (1.6L, 2.2L, 3.5L)
-  const decimalMatch = String(badge).match(/(\d+\.\d+)\s*[Ll]?/);
+// Маппинг модель → объём по умолчанию
+// Когда Badge не содержит объём (например "9인승 시그니처")
+const MODEL_ENGINE_DEFAULTS = {
+  // Carnival — три варианта двигателя
+  Carnival: { default: 2199, byFuel: { 가솔린: 3497, 디젤: 2199, LPG: 2199 } },
+  Starex: { default: 2359, byFuel: { 디젤: 2359 } },
+  Staria: { default: 2199, byFuel: { 디젤: 2199, 가솔린: 3497 } },
+  Grandeur: { default: 2497, byFuel: { 가솔린: 2497, LPG: 2497 } },
+  Sonata: { default: 1999, byFuel: { 가솔린: 1999, LPG: 1999 } },
+  K8: { default: 2497, byFuel: { 가솔린: 2497, LPG: 2497 } },
+  Palisade: { default: 2199, byFuel: { 디젤: 2199, 가솔린: 3778 } },
+  Rexton: { default: 1998, byFuel: { 디젤: 1998 } },
+};
+
+function getDefaultEngine(modelName, fuelType) {
+  if (!modelName) return 0;
+  const modelText = String(modelName);
+  const fuelText = fuelType ? String(fuelType) : "";
+
+  for (const [model, data] of Object.entries(MODEL_ENGINE_DEFAULTS)) {
+    if (modelText.includes(model)) {
+      if (fuelText && data.byFuel) {
+        for (const [fuel, cc] of Object.entries(data.byFuel)) {
+          if (fuelText.includes(fuel)) return cc;
+        }
+      }
+      return data.default;
+    }
+  }
+  return 0;
+}
+
+function parseEngineFromBadge(badge, modelName, fuelType) {
+  if (!badge) {
+    // Если Badge пустой — берём из маппинга модели
+    return getDefaultEngine(modelName, fuelType);
+  }
+
+  const text = String(badge);
+
+  // Паттерн 1: число с точкой (1.6, 2.0, 2.2, 3.5)
+  const decimalMatch = text.match(/(\d+\.\d+)/);
   if (decimalMatch) {
     const liters = parseFloat(decimalMatch[1]);
     if (liters >= 0.8 && liters <= 6.0) return Math.round(liters * 1000);
   }
 
-  // Паттерн 2: целое число перед типом топлива (3 가솔린, 2 디젤)
-  const intWithFuelMatch = String(badge).match(/(\d+)\s*(가솔린|디젤|LPG|HEV|PHEV|Turbo|터보)/);
-  if (intWithFuelMatch) {
-    const val = parseInt(intWithFuelMatch[1], 10);
+  // Паттерн 2: целое число перед типом топлива
+  const intFuelMatch = text.match(/(\d+)\s*(가솔린|디젤|LPG|HEV|PHEV|터보)/);
+  if (intFuelMatch) {
+    const val = parseInt(intFuelMatch[1], 10);
     if (val >= 1 && val <= 6) return val * 1000;
   }
 
-  // Паттерн 3: объём в cc напрямую (1598cc, 2199cc)
-  const ccMatch = String(badge).match(/(\d{3,4})\s*cc/i);
+  // Паттерн 3: объём в cc
+  const ccMatch = text.match(/(\d{3,4})\s*cc/i);
   if (ccMatch) {
     const cc = parseInt(ccMatch[1], 10);
     if (cc >= 800 && cc <= 6000) return cc;
   }
 
-  return 0;
+  // Если ничего не нашли — берём из маппинга модели
+  return getDefaultEngine(modelName, fuelType);
 }
 
 function normalizeEngineCc(value) {
@@ -482,7 +521,11 @@ async function mapCar(car) {
     year: Number(String(car.Year).slice(0, 4)),
     body_type: getBodyType(car.Model),
     mileage: car.Mileage,
-    engine_cc: normalizeEngineCc(car.Displacement) || parseEngineFromBadge(car.Badge),
+    engine_cc:
+      (car.Displacement && car.Displacement > 0
+        ? normalizeEngineCc(car.Displacement)
+        : 0) ||
+      parseEngineFromBadge(car.Badge, translateModel(car.Model), car.FuelType),
     fuel_type: car.FuelType ?? "gasoline",
     transmission: inspection.transmission ?? car.Transmission ?? "auto",
     color: inspection.color ?? femData.color ?? null,
@@ -651,6 +694,19 @@ async function main() {
       2,
     ),
   );
+
+  const carnivalSample = mappedCars
+    .filter((c) => String(c.model ?? "").includes("Carnival"))
+    .slice(0, 3)
+    .map((c) => ({
+      model: c.model,
+      engine_cc: c.engine_cc,
+      fuel_type: c.fuel_type,
+      badge: c.badge,
+    }));
+
+  console.log(`\nПример первых 3 Carnival:`);
+  console.log(JSON.stringify(carnivalSample, null, 2));
 }
 
 main();

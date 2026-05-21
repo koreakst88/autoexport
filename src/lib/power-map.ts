@@ -53,6 +53,7 @@ const POWER_MAP: PowerMap = {
   // Kia Carnival
   'kia_carnival_2199': { power: 202, note: '2.2 CRDi' },
   'kia_carnival_3497': { power: 272, note: '3.5 MPI' },
+  'kia_carnival_1598': { power: 180, note: '1.6 T-GDi HEV' },
 
   // Kia Seltos
   'kia_seltos_1591': { power: 177, note: '1.6 T-GDi' },
