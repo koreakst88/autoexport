@@ -238,6 +238,11 @@ export function CarDetailClient({
       ? calcFullPrice(car.price_krw, car.engine_cc ?? 0, selectedCountry.code)
       : null;
   const carPriceRub = formatPriceKrwToRub(car.price_krw);
+  const rubToLocalRate: Record<string, number> = { RU: 1, KZ: 6.5, KG: 0.862, UZ: 127 };
+  const toLocal = (rub: number) =>
+    Math.round(rub * (rubToLocalRate[selectedCountry.code] ?? 1));
+  const priceMan =
+    typeof car.price_krw === "number" ? (car.price_krw / 10000).toFixed(1) : null;
 
   useEffect(() => {
     setActivePhoto(0);
@@ -550,24 +555,28 @@ export function CarDetailClient({
               {car.drive_type ?? parseDriveType(car.badge) ?? parseDriveType(car.badge_detail) ?? "—"}
             </span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Аварии:</span>
-            <span className="font-semibold text-gray-900">
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Аварии:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">
               {car.has_accident ? "Были ⚠️" : "Нет ✅"}
             </span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Дата на Encar:</span>
-            <span className="font-semibold text-gray-900">{formatAddedDate(car.registered_at_encar ?? car.created_at ?? null)}</span>
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Дата на Encar:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">
+              {formatAddedDate(car.registered_at_encar ?? car.created_at ?? null)}
+            </span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Лот Encar:</span>
-            <span className="font-semibold text-gray-900">{car.encar_id}</span>
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Лот Encar:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">{car.encar_id}</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 text-sm">
-            <span className="text-gray-500">Стоимость в Корее:</span>
-            <span className="font-semibold text-gray-900">
-              {formatKrw(car.price_krw)} ₩ ({formatRub(carPriceRub)} ₽)
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Стоимость в Корее:</span>
+            <span className="text-xs font-medium text-gray-900 text-right whitespace-nowrap">
+              {typeof car.price_krw === "number" && calc && priceMan
+                ? `${priceMan}만 ₩ · ${toLocal(calc.carPriceRub).toLocaleString("ru-RU")} ${selectedCountry.currency}`
+                : `${formatKrw(car.price_krw)} ₩`}
             </span>
           </div>
         </div>
