@@ -68,6 +68,17 @@ type BreakdownRow = {
   bold?: boolean;
 };
 
+type RealCalc = {
+  rate_krw_rub: number;
+  car_price_rub: number;
+  duty_rub: number;
+  fees_rub: number;
+  util_rub: number;
+  total_rub: number;
+  freight_rub: number;
+  broker_rub: number;
+};
+
 function formatDateDot(dateStr: string | null): string {
   if (!dateStr) return "—";
   const date = new Date(dateStr);
@@ -208,6 +219,8 @@ export function CarDetailClient({
   const [favorites, setFavorites] = useState<string[]>([]);
   const [brokenPhoto, setBrokenPhoto] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
+  const [realCalc, setRealCalc] = useState<RealCalc | null>(null);
+  const [calcLoading, setCalcLoading] = useState(false);
 
   const selectedCountry: Country =
     COUNTRIES.find((item) => item.code === countryCode) ?? COUNTRIES[0];
@@ -226,7 +239,98 @@ export function CarDetailClient({
     typeof car.price_krw === "number"
       ? calcFullPrice(car.price_krw, car.engine_cc ?? 0, selectedCountry.code)
       : null;
-  const totalPrice = calc?.totalLocal;
+  const totalPrice =
+    selectedCountry.code === "RU" && realCalc && realCalc.total_rub > 0
+      ? realCalc.total_rub
+      : calc?.totalLocal;
+
+  // Load RU calculation from Korex proxy (fallbacks inside route).
+  useEffect(() => {
+    if (selectedCountry.code !== "RU") return;
+    if (typeof car.price_krw !== "number" || typeof car.year !== "number") return;
+
+    const month = parseInt(
+      String(car.first_registration_korea ?? "").split(".")?.[0] ?? "1",
+      10,
+    );
+
+    setCalcLoading(true);
+    fetch("/api/calculate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        price_krw: car.price_krw,
+        year: car.year,
+        month: Number.isFinite(month) ? month : 1,
+        engine_cc: car.engine_cc ?? 0,
+        power_hp: car.power_hp ?? 0,
+        brand: car.brand,
+        model: car.model,
+        fuel_type: car.fuel_type,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const ok =
+          data &&
+          !data.error &&
+          typeof data.total_rub === "number" &&
+          data.total_rub > 0 &&
+          typeof data.rate_krw_rub === "number" &&
+          data.rate_krw_rub > 0;
+        setRealCalc(ok ? data : null);
+      })
+      .catch(() => setRealCalc(null))
+      .finally(() => setCalcLoading(false));
+  }, [
+    car.brand,
+    car.encar_id,
+    car.engine_cc,
+    car.first_registration_korea,
+    car.fuel_type,
+    car.model,
+    car.power_hp,
+    car.price_krw,
+    car.year,
+    selectedCountry.code,
+  ]);
+
+  const ruBreakdownReal: BreakdownRow[] | null =
+    selectedCountry.code === "RU" && realCalc && realCalc.total_rub > 0
+      ? [
+          {
+            label: "Авто в Корее",
+            value: `${car.price_krw?.toLocaleString("ru-RU")} ₩ · ${realCalc.car_price_rub.toLocaleString("ru-RU")} ₽`,
+          },
+          {
+            label: "Фрахт до Владивостока",
+            value: `${realCalc.freight_rub.toLocaleString("ru-RU")} ₽`,
+          },
+          {
+            label: "Брокер + СБКТС + ЭПТС",
+            value: `${realCalc.broker_rub.toLocaleString("ru-RU")} ₽`,
+          },
+          {
+            label: "CFR Владивосток",
+            value: `${(realCalc.car_price_rub + realCalc.freight_rub + realCalc.broker_rub).toLocaleString("ru-RU")} ₽`,
+            bold: true,
+          },
+          {
+            label: "Таможенная пошлина",
+            value: `${realCalc.duty_rub.toLocaleString("ru-RU")} ₽`,
+          },
+          {
+            label: "Тамож. сборы",
+            value: `${realCalc.fees_rub.toLocaleString("ru-RU")} ₽`,
+          },
+          {
+            label: "Утилизационный сбор",
+            value: `${realCalc.util_rub.toLocaleString("ru-RU")} ₽`,
+          },
+          { label: "Доставка до города", value: "по запросу" },
+          { label: "ИТОГО", value: `${realCalc.total_rub.toLocaleString("ru-RU")} ₽`, bold: true },
+        ]
+      : null;
 
   useEffect(() => {
     setActivePhoto(0);
@@ -446,7 +550,10 @@ export function CarDetailClient({
 
             {priceOpen && calc ? (
               <div className="border-t border-gray-100 bg-gray-50">
-                {(getPriceBreakdown(calc, car, selectedCountry.code) as BreakdownRow[]).map((row, idx, arr) => (
+                {((selectedCountry.code === "RU" && ruBreakdownReal
+                  ? ruBreakdownReal
+                  : (getPriceBreakdown(calc, car, selectedCountry.code) as BreakdownRow[])) as BreakdownRow[]
+                ).map((row, idx, arr) => (
                   <div
                     key={`${row.label}-${idx}`}
                     className={`flex justify-between items-center px-3 py-2 ${
@@ -472,8 +579,15 @@ export function CarDetailClient({
 
             <div className="border-t border-gray-100 px-3 py-2">
               <p className="text-center text-xs text-gray-400">
-                {"Расчёт приблизительный ±15%"}
+                {selectedCountry.code === "RU" && realCalc
+                  ? `Курс ЦБ: 1000₩ = ${(realCalc.rate_krw_rub * 1000).toFixed(2)}₽ · Расчёт актуален`
+                  : "Расчёт приблизительный ±15%"}
               </p>
+              {selectedCountry.code === "RU" && calcLoading ? (
+                <p className="mt-1 text-center text-xs text-gray-400">
+                  Обновляем точный расчёт...
+                </p>
+              ) : null}
             </div>
           </div>
 

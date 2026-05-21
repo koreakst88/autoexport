@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getPowerHp } from "@/lib/power-map";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+
+  const powerHp =
+    typeof body.power_hp === "number" && body.power_hp > 0
+      ? body.power_hp
+      : getPowerHp(String(body.brand ?? ""), String(body.model ?? ""), Number(body.engine_cc ?? 0));
 
   const params = new URLSearchParams({
     price: String(body.price_krw),
     year: String(body.year),
     month: String(body.month ?? "1"),
     v: String(body.engine_cc ?? 0),
-    powerDVS: String(body.power_hp ?? 0),
-    p: String(body.power_hp ?? 0),
+    powerDVS: String(powerHp ?? 0),
+    p: String(powerHp ?? 0),
     fiz: "1",
     currency: "KRW",
     sanction: "1",
