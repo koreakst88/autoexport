@@ -75,8 +75,12 @@ type RealCalc = {
   fees_rub: number;
   util_rub: number;
   total_rub: number;
+  total_local?: number;
   freight_rub: number;
   broker_rub: number;
+  currency?: string;
+  country?: string;
+  power_hp?: number;
 };
 
 function formatDateDot(dateStr: string | null): string {
@@ -240,19 +244,15 @@ export function CarDetailClient({
       ? calcFullPrice(car.price_krw, car.engine_cc ?? 0, selectedCountry.code)
       : null;
   const totalPrice =
-    selectedCountry.code === "RU" && realCalc && realCalc.total_rub > 0
-      ? realCalc.total_rub
+    realCalc?.total_rub
+      ? selectedCountry.code === "RU"
+        ? realCalc.total_rub
+        : realCalc.total_local
       : calc?.totalLocal;
 
-  // Load RU calculation from Korex proxy (fallbacks inside route).
+  // Load calculation from our server calculator for selected country.
   useEffect(() => {
-    if (selectedCountry.code !== "RU") return;
     if (typeof car.price_krw !== "number" || typeof car.year !== "number") return;
-
-    const month = parseInt(
-      String(car.first_registration_korea ?? "").split(".")?.[0] ?? "1",
-      10,
-    );
 
     setCalcLoading(true);
     fetch("/api/calculate", {
@@ -261,12 +261,12 @@ export function CarDetailClient({
       body: JSON.stringify({
         price_krw: car.price_krw,
         year: car.year,
-        month: Number.isFinite(month) ? month : 1,
         engine_cc: car.engine_cc ?? 0,
         power_hp: car.power_hp ?? 0,
         brand: car.brand,
         model: car.model,
         fuel_type: car.fuel_type,
+        country: selectedCountry.code,
       }),
     })
       .then((r) => r.json())
@@ -286,7 +286,6 @@ export function CarDetailClient({
     car.brand,
     car.encar_id,
     car.engine_cc,
-    car.first_registration_korea,
     car.fuel_type,
     car.model,
     car.power_hp,
@@ -295,8 +294,8 @@ export function CarDetailClient({
     selectedCountry.code,
   ]);
 
-  const ruBreakdownReal: BreakdownRow[] | null =
-    selectedCountry.code === "RU" && realCalc && realCalc.total_rub > 0
+  const breakdownReal: BreakdownRow[] | null =
+    realCalc && realCalc.total_rub > 0
       ? [
           {
             label: "Авто в Корее",
@@ -550,10 +549,8 @@ export function CarDetailClient({
 
             {priceOpen && calc ? (
               <div className="border-t border-gray-100 bg-gray-50">
-                {((selectedCountry.code === "RU" && ruBreakdownReal
-                  ? ruBreakdownReal
-                  : (getPriceBreakdown(calc, car, selectedCountry.code) as BreakdownRow[])) as BreakdownRow[]
-                ).map((row, idx, arr) => (
+                {((breakdownReal ?? (getPriceBreakdown(calc, car, selectedCountry.code) as BreakdownRow[])) as BreakdownRow[])
+                  .map((row, idx, arr) => (
                   <div
                     key={`${row.label}-${idx}`}
                     className={`flex justify-between items-center px-3 py-2 ${
@@ -579,7 +576,7 @@ export function CarDetailClient({
 
             <div className="border-t border-gray-100 px-3 py-2">
               <p className="text-center text-xs text-gray-400">
-                {selectedCountry.code === "RU" && realCalc
+                {realCalc
                   ? `Курс ЦБ: 1000₩ = ${(realCalc.rate_krw_rub * 1000).toFixed(2)}₽ · Расчёт актуален`
                   : "Расчёт приблизительный ±15%"}
               </p>
