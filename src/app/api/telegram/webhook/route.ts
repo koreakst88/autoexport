@@ -4,8 +4,46 @@ import { createClient } from "@supabase/supabase-js";
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const WEBAPP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "https://autoexport-nu.vercel.app";
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+);
+
+async function upsertUser(from: any) {
+  if (!from?.id) return;
+
+  const tgUserId = String(from.id);
+
+  const { data: existing } = await supabase
+    .from("users")
+    .select("id, launches_count")
+    .eq("tg_user_id", tgUserId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("users")
+      .update({
+        last_seen_at: new Date().toISOString(),
+        launches_count: (existing.launches_count ?? 0) + 1,
+        tg_username: from.username ?? null,
+        first_name: from.first_name ?? null,
+        last_name: from.last_name ?? null,
+      })
+      .eq("tg_user_id", tgUserId);
+  } else {
+    await supabase.from("users").insert({
+      tg_user_id: tgUserId,
+      tg_username: from.username ?? null,
+      first_name: from.first_name ?? null,
+      last_name: from.last_name ?? null,
+      language_code: from.language_code ?? null,
+      launches_count: 1,
+      last_seen_at: new Date().toISOString(),
+    });
+  }
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -17,44 +55,14 @@ export async function POST(req: NextRequest) {
   const text = message.text as string | undefined;
   const from = message.from;
 
-  if (from && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-    await upsertBotUser({
-      telegram_id: from.id,
-      chat_id: chatId,
-      username: from.username ?? null,
-      first_name: from.first_name ?? null,
-      last_name: from.last_name ?? null,
-      language_code: from.language_code ?? null,
-      is_bot: from.is_bot ?? null,
-      last_seen_at: new Date().toISOString(),
-    });
-  }
+  // Сохраняем пользователя при любом сообщении
+  await upsertUser(from);
 
   if (text === "/start" || (typeof text === "string" && text.startsWith("/start"))) {
     await sendWelcome(chatId);
   }
 
   return NextResponse.json({ ok: true });
-}
-
-async function upsertBotUser(user: {
-  telegram_id: number;
-  chat_id: number;
-  username: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  language_code: string | null;
-  is_bot: boolean | null;
-  last_seen_at: string;
-}) {
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { error } = await supabase
-    .from("bot_users")
-    .upsert(user, { onConflict: "telegram_id" });
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.error("bot_users upsert failed:", error);
-  }
 }
 
 async function sendWelcome(chatId: number) {
