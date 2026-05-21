@@ -60,17 +60,19 @@ export default function FavoritesPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="border-b border-gray-100 bg-white px-4 py-4 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            if (window.history.length > 1) router.back();
-            else router.push("/");
-          }}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700"
-          aria-label="Назад"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        {!isInTelegram ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) router.back();
+              else router.push("/");
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700"
+            aria-label="Назад"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        ) : null}
         <h1 className="text-lg font-bold text-gray-900">Избранное</h1>
       </div>
 

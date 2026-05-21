@@ -178,19 +178,23 @@ export function QuizClient() {
       <div className="mx-auto max-w-md">
         <div className="mb-6">
           <div className="mb-3 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                if (step > 1) goBack();
-                else if (window.history.length > 1) router.back();
-                else router.push("/");
-              }}
-              className="flex items-center gap-2 text-sm font-semibold text-gray-700"
-              aria-label="Назад"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Назад
-            </button>
+            {!isInTelegram ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (step > 1) goBack();
+                  else if (window.history.length > 1) router.back();
+                  else router.push("/");
+                }}
+                className="flex items-center gap-2 text-sm font-semibold text-gray-700"
+                aria-label="Назад"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Назад
+              </button>
+            ) : (
+              <div className="w-16" />
+            )}
             <div className="text-xs font-medium text-gray-500">
               Шаг {step} из {STEPS_TOTAL}
             </div>

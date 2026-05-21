@@ -263,17 +263,21 @@ export function CatalogClient({ cars, initialBrand }: CatalogClientProps) {
     <main className="min-h-screen bg-gray-50 pb-24 text-gray-950">
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.history.length > 1) router.back();
-              else router.push("/");
-            }}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700"
-            aria-label="Назад"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
+          {!isInTelegram ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.history.length > 1) router.back();
+                else router.push("/");
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700"
+              aria-label="Назад"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
 
           <div className="flex-1 text-center text-xl font-semibold tracking-tight">
             AutoExport
