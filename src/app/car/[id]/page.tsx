@@ -4,6 +4,7 @@ import {
   CarDetailClient,
   type CarDetailCar,
 } from "@/components/car/CarDetailClient";
+import { getKrwRate } from "@/lib/get-krw-rate";
 
 export default async function CarPage({
   params,
@@ -11,6 +12,7 @@ export default async function CarPage({
   params: { id: string };
 }) {
   const supabase = createClient();
+  const krwRate = await getKrwRate();
 
   // В качестве id используем encar_id (он стабильный и уже есть в каталоге).
   const { data: car, error } = await supabase
@@ -39,6 +41,7 @@ export default async function CarPage({
     <CarDetailClient
       car={car as CarDetailCar}
       similarCars={(similarCars ?? []) as CarDetailCar[]}
+      krwRate={krwRate}
     />
   );
 }

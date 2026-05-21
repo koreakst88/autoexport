@@ -68,21 +68,6 @@ type BreakdownRow = {
   bold?: boolean;
 };
 
-type RealCalc = {
-  rate_krw_rub: number;
-  car_price_rub: number;
-  duty_rub: number;
-  fees_rub: number;
-  util_rub: number;
-  total_rub: number;
-  total_local?: number;
-  freight_rub: number;
-  broker_rub: number;
-  currency?: string;
-  country?: string;
-  power_hp?: number;
-};
-
 function formatDateDot(dateStr: string | null): string {
   if (!dateStr) return "—";
   const date = new Date(dateStr);
@@ -211,9 +196,11 @@ function getPriceBreakdown(result: CalcResult, car: CarDetailCar, countryCode: s
 export function CarDetailClient({
   car,
   similarCars = [],
+  krwRate,
 }: {
   car: CarDetailCar;
   similarCars?: CarDetailCar[];
+  krwRate: number;
 }) {
   const router = useRouter();
   const { isInTelegram, showBackButton, hideBackButton } = useTelegram();
@@ -223,8 +210,6 @@ export function CarDetailClient({
   const [favorites, setFavorites] = useState<string[]>([]);
   const [brokenPhoto, setBrokenPhoto] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
-  const [realCalc, setRealCalc] = useState<RealCalc | null>(null);
-  const [calcLoading, setCalcLoading] = useState(false);
 
   const selectedCountry: Country =
     COUNTRIES.find((item) => item.code === countryCode) ?? COUNTRIES[0];
@@ -247,93 +232,40 @@ export function CarDetailClient({
           selectedCountry.code,
           car.year ?? 2021,
           car.power_hp ?? 0,
+          krwRate,
         )
       : null;
-  const totalPrice =
-    realCalc?.total_rub
-      ? selectedCountry.code === "RU"
-        ? realCalc.total_rub
-        : realCalc.total_local
-      : calc?.totalLocal;
+  const totalPrice = calc?.totalLocal;
 
-  // Load calculation from our server calculator for selected country.
-  useEffect(() => {
-    if (typeof car.price_krw !== "number" || typeof car.year !== "number") return;
-
-    setCalcLoading(true);
-    fetch("/api/calculate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        price_krw: car.price_krw,
-        year: car.year,
-        engine_cc: car.engine_cc ?? 0,
-        power_hp: car.power_hp ?? 0,
-        brand: car.brand,
-        model: car.model,
-        fuel_type: car.fuel_type,
-        country: selectedCountry.code,
-      }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        const ok =
-          data &&
-          !data.error &&
-          typeof data.total_rub === "number" &&
-          data.total_rub > 0 &&
-          typeof data.rate_krw_rub === "number" &&
-          data.rate_krw_rub > 0;
-        setRealCalc(ok ? data : null);
-      })
-      .catch(() => setRealCalc(null))
-      .finally(() => setCalcLoading(false));
-  }, [
-    car.brand,
-    car.encar_id,
-    car.engine_cc,
-    car.fuel_type,
-    car.model,
-    car.power_hp,
-    car.price_krw,
-    car.year,
-    selectedCountry.code,
-  ]);
-
-  const breakdownReal: BreakdownRow[] | null =
-    realCalc && realCalc.total_rub > 0
+  const breakdown: BreakdownRow[] | null =
+    calc && selectedCountry.code === "RU"
       ? [
           {
             label: "Авто в Корее",
-            value: `${car.price_krw?.toLocaleString("ru-RU")} ₩ · ${realCalc.car_price_rub.toLocaleString("ru-RU")} ₽`,
+            value: `${car.price_krw?.toLocaleString("ru-RU")} ₩ · ${calc.carPriceRub.toLocaleString("ru-RU")} ₽`,
           },
           {
             label: "Фрахт до Владивостока",
-            value: `${realCalc.freight_rub.toLocaleString("ru-RU")} ₽`,
+            value: `${calc.freightRub.toLocaleString("ru-RU")} ₽`,
           },
           {
             label: "Брокер + СБКТС + ЭПТС",
-            value: `${realCalc.broker_rub.toLocaleString("ru-RU")} ₽`,
-          },
-          {
-            label: "CFR Владивосток",
-            value: `${(realCalc.car_price_rub + realCalc.freight_rub + realCalc.broker_rub).toLocaleString("ru-RU")} ₽`,
-            bold: true,
+            value: `${calc.brokerRub.toLocaleString("ru-RU")} ₽`,
           },
           {
             label: "Таможенная пошлина",
-            value: `${realCalc.duty_rub.toLocaleString("ru-RU")} ₽`,
-          },
-          {
-            label: "Тамож. сборы",
-            value: `${realCalc.fees_rub.toLocaleString("ru-RU")} ₽`,
+            value: `${calc.customsDutyRub.toLocaleString("ru-RU")} ₽`,
           },
           {
             label: "Утилизационный сбор",
-            value: `${realCalc.util_rub.toLocaleString("ru-RU")} ₽`,
+            value: `${calc.utilRub.toLocaleString("ru-RU")} ₽`,
           },
           { label: "Доставка до города", value: "по запросу" },
-          { label: "ИТОГО", value: `${realCalc.total_rub.toLocaleString("ru-RU")} ₽`, bold: true },
+          {
+            label: "ИТОГО",
+            value: `${calc.totalLocal.toLocaleString("ru-RU")} ${calc.currency}`,
+            bold: true,
+          },
         ]
       : null;
 
@@ -555,7 +487,7 @@ export function CarDetailClient({
 
             {priceOpen && calc ? (
               <div className="border-t border-gray-100 bg-gray-50">
-                {((breakdownReal ?? (getPriceBreakdown(calc, car, selectedCountry.code) as BreakdownRow[])) as BreakdownRow[])
+                {(((breakdown ?? getPriceBreakdown(calc, car, selectedCountry.code)) as BreakdownRow[]))
                   .map((row, idx, arr) => (
                   <div
                     key={`${row.label}-${idx}`}
@@ -582,15 +514,8 @@ export function CarDetailClient({
 
             <div className="border-t border-gray-100 px-3 py-2">
               <p className="text-center text-xs text-gray-400">
-                {realCalc
-                  ? `Курс ЦБ: 1000₩ = ${(realCalc.rate_krw_rub * 1000).toFixed(2)}₽ · Расчёт актуален`
-                  : "Расчёт приблизительный ±15%"}
+                {`Курс ЦБ: 1000₩ = ${(krwRate * 1000).toFixed(2)}₽ · Расчёт актуален`}
               </p>
-              {selectedCountry.code === "RU" && calcLoading ? (
-                <p className="mt-1 text-center text-xs text-gray-400">
-                  Обновляем точный расчёт...
-                </p>
-              ) : null}
             </div>
           </div>
 
@@ -709,6 +634,7 @@ export function CarDetailClient({
                       selectedCountry.code,
                       item.year ?? 2021,
                       item.power_hp ?? 0,
+                      krwRate,
                     )
                   : null;
 

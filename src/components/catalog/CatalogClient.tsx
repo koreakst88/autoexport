@@ -108,10 +108,10 @@ function getFirstPhoto(photos: string[] | null) {
 type CatalogClientProps = {
   cars: CatalogCar[];
   initialBrand?: string;
-  krwRateRub?: number;
+  krwRate: number;
 };
 
-export function CatalogClient({ cars, initialBrand, krwRateRub }: CatalogClientProps) {
+export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProps) {
   const router = useRouter();
   const { isInTelegram, showBackButton, hideBackButton } = useTelegram();
   type CountryCode = (typeof COUNTRIES)[number]["code"];
@@ -162,7 +162,7 @@ export function CatalogClient({ cars, initialBrand, krwRateRub }: CatalogClientP
     console.log("Расчёт:", {
       priceKrw: 20000000,
       countryCode: selectedCountry.code,
-      result: calcFullPrice(20000000, 1600, selectedCountry.code, 2021, 0, krwRateRub),
+      result: calcFullPrice(20000000, 1600, selectedCountry.code, 2021, 0, krwRate),
     });
   }, [selectedCountry.code]);
 
@@ -218,7 +218,7 @@ export function CatalogClient({ cars, initialBrand, krwRateRub }: CatalogClientP
           selectedCountry.code,
           car.year ?? 2021,
           car.power_hp ?? 0,
-          krwRateRub,
+          krwRate,
         );
         const price = calc.totalLocal;
         if (filters.priceFrom) {
@@ -312,7 +312,7 @@ export function CatalogClient({ cars, initialBrand, krwRateRub }: CatalogClientP
             onClick={() => {
               setCountryCode(country.code);
               setIsCountryOpen(false);
-              const preview = calcFullPrice(25_000_000, 1600, country.code, 2021, 0, krwRateRub);
+              const preview = calcFullPrice(25_000_000, 1600, country.code, 2021, 0, krwRate);
               console.log(
                 `Страна: ${country.name}, пример цены: ${preview.totalLocal.toLocaleString("ru-RU")} ${country.currency}`,
               );
@@ -384,7 +384,7 @@ export function CatalogClient({ cars, initialBrand, krwRateRub }: CatalogClientP
                   selectedCountry.code,
                   car.year ?? 2021,
                   car.power_hp ?? 0,
-                  krwRateRub,
+                  krwRate,
                 )
               : null;
           const specs = [
