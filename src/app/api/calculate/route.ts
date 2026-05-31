@@ -144,6 +144,7 @@ export async function POST(req: NextRequest) {
     const month = Number(body.month) || 6
     const brand = body.brand ?? ''
     const model = body.model ?? ''
+    const badgeDetail = body.badge_detail ?? ''
     const country = body.country ?? 'RU'
 
     // Получаем актуальный курс ЦБ
@@ -153,7 +154,7 @@ export async function POST(req: NextRequest) {
     const powerHp =
       Number(body.power_hp) > 0
         ? Number(body.power_hp)
-        : getPowerHp(brand, model, engineCc)
+        : getPowerHp(brand, model, engineCc, badgeDetail)
 
     const carPriceRub = Math.round(priceKrw * krwRate)
 

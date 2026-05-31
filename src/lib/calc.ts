@@ -1,3 +1,5 @@
+import { getPowerHp } from '@/lib/power-map'
+
 export interface Country {
   code: string
   name: string
@@ -130,9 +132,12 @@ export function calcFullPrice(
   year: number = 2021,
   powerHp: number = 0,
   krwRate: number = KRW_TO_RUB,
+  brand: string = '',
+  model: string = '',
+  badgeDetail: string = '',
 ): CalcResult {
   const cc = engineCc > 0 ? engineCc : 1600
-  const hp = powerHp > 0 ? powerHp : estimatePower(cc)
+  const hp = powerHp > 0 ? powerHp : getPowerHp(brand, model, cc, badgeDetail)
   const carPriceRub = Math.round(priceKrw * krwRate)
 
   const RUB_TO_LOCAL: Record<string, number> = {
@@ -193,16 +198,5 @@ export function calcFullPrice(
     currency: CURRENCY[countryCode] ?? '₽',
     powerHp: hp,
   }
-}
-
-// Примерная мощность по объёму если нет данных
-function estimatePower(cc: number): number {
-  if (cc <= 1000) return 75
-  if (cc <= 1400) return 100
-  if (cc <= 1600) return 130
-  if (cc <= 2000) return 150
-  if (cc <= 2500) return 200
-  if (cc <= 3000) return 250
-  return 300
 }
 

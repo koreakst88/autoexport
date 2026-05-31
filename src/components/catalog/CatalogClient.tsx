@@ -219,6 +219,9 @@ export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProp
           car.year ?? 2021,
           car.power_hp ?? 0,
           krwRate,
+          car.brand ?? "",
+          car.model ?? "",
+          car.badge_detail ?? "",
         );
         const price = calc.totalLocal;
         if (filters.priceFrom) {
@@ -385,6 +388,9 @@ export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProp
                   car.year ?? 2021,
                   car.power_hp ?? 0,
                   krwRate,
+                  car.brand ?? "",
+                  car.model ?? "",
+                  car.badge_detail ?? "",
                 )
               : null;
           const specs = [

@@ -285,6 +285,9 @@ export function HomeClient({
               car.year ?? 2021,
               (car as any).power_hp ?? 0,
               krwRate,
+              car.brand ?? "",
+              car.model ?? "",
+              (car as any).badge_detail ?? "",
             );
             return (
               <Link key={car.encar_id} href={`/car/${car.encar_id}`}>

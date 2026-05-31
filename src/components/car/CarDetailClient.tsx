@@ -233,6 +233,9 @@ export function CarDetailClient({
           car.year ?? 2021,
           car.power_hp ?? 0,
           krwRate,
+          car.brand ?? "",
+          car.model ?? "",
+          car.badge_detail ?? "",
         )
       : null;
   const totalPrice = calc?.totalLocal;
@@ -635,6 +638,9 @@ export function CarDetailClient({
                       item.year ?? 2021,
                       item.power_hp ?? 0,
                       krwRate,
+                      item.brand ?? "",
+                      item.model ?? "",
+                      item.badge_detail ?? "",
                     )
                   : null;
 
