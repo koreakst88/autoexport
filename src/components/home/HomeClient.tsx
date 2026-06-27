@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { calcFullPrice, COUNTRIES } from "@/lib/calc";
+import { calcFullPrice, COUNTRIES, getRegistrationMonth } from "@/lib/calc";
 import { BottomNav } from "@/components/shared/BottomNav";
 import type { CatalogCar } from "@/components/catalog/CatalogClient";
 
@@ -288,6 +288,7 @@ export function HomeClient({
               car.brand ?? "",
               car.model ?? "",
               (car as any).badge_detail ?? "",
+              getRegistrationMonth(car.first_registration_korea),
             );
             return (
               <Link key={car.encar_id} href={`/car/${car.encar_id}`}>

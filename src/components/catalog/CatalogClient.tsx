@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, ChevronDown, Star } from "lucide-react";
-import { calcFullPrice, COUNTRIES } from "@/lib/calc";
+import { calcFullPrice, COUNTRIES, getRegistrationMonth } from "@/lib/calc";
 import {
   getFavorites,
   toggleFavorite as toggleStoredFavorite,
@@ -222,6 +222,7 @@ export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProp
           car.brand ?? "",
           car.model ?? "",
           car.badge_detail ?? "",
+          getRegistrationMonth(car.first_registration_korea),
         );
         const price = calc.totalLocal;
         if (filters.priceFrom) {
@@ -391,6 +392,7 @@ export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProp
                   car.brand ?? "",
                   car.model ?? "",
                   car.badge_detail ?? "",
+                  getRegistrationMonth(car.first_registration_korea),
                 )
               : null;
           const specs = [

@@ -17,36 +17,107 @@ export const COUNTRIES: Country[] = [
 // Курс — обновляется с ЦБ через API, здесь fallback
 export const KRW_TO_RUB = 0.04718
 
-const EUR_RATE = 78.5
+const CUSTOMS_EUR_RATE = 87.403
 const USD_RATE = 70.95
 
-// Утилизационный сбор 2025 для физлиц
-// Зависит от мощности и возраста авто
-function getUtilSbor(powerHp: number, year: number): number {
-  const BASE = 20000
-  const age = new Date().getFullYear() - year
+function getCarAge(year: number, month: number = 6): number {
+  const now = new Date()
+  const regDate = new Date(year, month - 1, 1)
+  return (now.getTime() - regDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+}
 
-  function coeff(hp: number, isNew: boolean): number {
-    if (isNew) {
-      if (hp <= 90) return 5.93
-      if (hp <= 150) return 17.07
-      if (hp <= 200) return 44.24
-      if (hp <= 300) return 140.52
-      if (hp <= 400) return 149.44
-      if (hp <= 500) return 347.18
-      return 714.94
+export function getRegistrationMonth(dateStr: string | null | undefined): number {
+  if (!dateStr) return 6
+  const month = parseInt(dateStr.split('.')[0], 10)
+  return month >= 1 && month <= 12 ? month : 6
+}
+
+function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number {
+  const smallCc = engineCc <= 2000
+  const midCc = engineCc <= 3000
+
+  if (isNew) {
+    if (smallCc) {
+      if (powerHp <= 160) return 0.17
+      if (powerHp <= 180) return 45.0
+      if (powerHp <= 200) return 47.64
+      if (powerHp <= 250) return 50.52
+      if (powerHp <= 270) return 57.12
+      if (powerHp <= 300) return 64.56
+      if (powerHp <= 350) return 83.16
+      if (powerHp <= 400) return 94.8
+      return 108.0
     }
 
-    if (hp <= 90) return 1.67
-    if (hp <= 150) return 6.31
-    if (hp <= 200) return 12.98
-    if (hp <= 300) return 17.57
-    if (hp <= 400) return 35.14
-    if (hp <= 500) return 60.75
-    return 122.38
+    if (midCc) {
+      if (powerHp <= 160) return 0.17
+      if (powerHp <= 180) return 115.34
+      if (powerHp <= 200) return 118.2
+      if (powerHp <= 250) return 120.12
+      if (powerHp <= 270) return 126.0
+      if (powerHp <= 300) return 131.04
+      if (powerHp <= 350) return 141.72
+      if (powerHp <= 400) return 147.48
+      return 153.36
+    }
+
+    if (powerHp <= 160) return 129.2
+    if (powerHp <= 180) return 131.76
+    if (powerHp <= 200) return 134.4
+    if (powerHp <= 250) return 137.16
+    if (powerHp <= 270) return 140.52
+    if (powerHp <= 300) return 144.0
+    if (powerHp <= 350) return 160.32
+    if (powerHp <= 400) return 169.2
+    return 178.44
   }
 
-  return Math.round(BASE * coeff(powerHp, age < 3))
+  if (smallCc) {
+    if (powerHp <= 160) return 0.26
+    if (powerHp <= 190) return 74.64
+    if (powerHp <= 220) return 79.2
+    if (powerHp <= 250) return 83.88
+    if (powerHp <= 270) return 91.92
+    if (powerHp <= 300) return 100.56
+    if (powerHp <= 350) return 120.6
+    if (powerHp <= 400) return 132.0
+    return 144.6
+  }
+
+  if (midCc) {
+    if (powerHp <= 160) return 0.26
+    if (powerHp <= 180) return 172.8
+    if (powerHp <= 200) return 175.08
+    if (powerHp <= 250) return 177.6
+    if (powerHp <= 270) return 183.0
+    if (powerHp <= 309) return 188.52
+    if (powerHp <= 340) return 193.68
+    if (powerHp <= 369) return 199.08
+    if (powerHp <= 400) return 204.72
+    return 210.48
+  }
+
+  if (powerHp <= 160) return 197.81
+  if (powerHp <= 180) return 200.04
+  if (powerHp <= 200) return 202.2
+  if (powerHp <= 250) return 204.36
+  if (powerHp <= 270) return 207.24
+  if (powerHp <= 300) return 212.4
+  if (powerHp <= 350) return 224.28
+  if (powerHp <= 400) return 231.0
+  return 237.96
+}
+
+// Утилизационный сбор по матрице, сверенной с Korex calculator.
+function getUtilSbor(
+  powerHp: number,
+  engineCc: number,
+  year: number,
+  month: number = 6,
+): number {
+  const BASE = 20000
+  const age = getCarAge(year, month)
+  return Math.round(BASE * getUtilCoeff(powerHp, engineCc, age < 3))
 }
 
 function getCustomsDutyRu(
@@ -54,10 +125,11 @@ function getCustomsDutyRu(
   engineCc: number,
   krwRate: number,
   year: number,
+  month: number = 6,
 ): number {
   const priceRub = priceKrw * krwRate
-  const priceEur = priceRub / EUR_RATE
-  const age = new Date().getFullYear() - year
+  const priceEur = priceRub / CUSTOMS_EUR_RATE
+  const age = getCarAge(year, month)
 
   let eurPerCc: number
   let percentRate: number
@@ -107,8 +179,8 @@ function getCustomsDutyRu(
     }
   }
 
-  const dutyByVolume = engineCc * eurPerCc * EUR_RATE
-  const dutyByValue = priceEur * percentRate * EUR_RATE
+  const dutyByVolume = engineCc * eurPerCc * CUSTOMS_EUR_RATE
+  const dutyByValue = priceEur * percentRate * CUSTOMS_EUR_RATE
   return Math.round(Math.max(dutyByVolume, dutyByValue))
 }
 
@@ -135,6 +207,7 @@ export function calcFullPrice(
   brand: string = '',
   model: string = '',
   badgeDetail: string = '',
+  month: number = 6,
 ): CalcResult {
   const cc = engineCc > 0 ? engineCc : 1600
   const hp = powerHp > 0 ? powerHp : getPowerHp(brand, model, cc, badgeDetail)
@@ -156,9 +229,9 @@ export function calcFullPrice(
   if (countryCode === 'RU') {
     const freightRub = Math.round(1200 * USD_RATE)
     const brokerRub = 90000
-    const dutyRub = getCustomsDutyRu(priceKrw, cc, krwRate, year)
+    const dutyRub = getCustomsDutyRu(priceKrw, cc, krwRate, year, month)
     const feesRub = carPriceRub / USD_RATE <= 10000 ? 6187 : 10500
-    const utilRub = getUtilSbor(hp, year)
+    const utilRub = getUtilSbor(hp, cc, year, month)
     const totalRub = carPriceRub + freightRub + brokerRub + dutyRub + feesRub + utilRub
 
     return {
@@ -199,4 +272,3 @@ export function calcFullPrice(
     powerHp: hp,
   }
 }
-

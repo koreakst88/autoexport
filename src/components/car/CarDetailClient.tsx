@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { calcFullPrice, type CalcResult } from "@/lib/calc";
+import { calcFullPrice, getRegistrationMonth, type CalcResult } from "@/lib/calc";
 import { getFavorites, toggleFavorite } from "@/lib/favorites";
 import {
   translateBadge,
@@ -236,6 +236,7 @@ export function CarDetailClient({
           car.brand ?? "",
           car.model ?? "",
           car.badge_detail ?? "",
+          getRegistrationMonth(car.first_registration_korea),
         )
       : null;
   const totalPrice = calc?.totalLocal;
@@ -641,6 +642,7 @@ export function CarDetailClient({
                       item.brand ?? "",
                       item.model ?? "",
                       item.badge_detail ?? "",
+                      getRegistrationMonth(item.first_registration_korea),
                     )
                   : null;
 

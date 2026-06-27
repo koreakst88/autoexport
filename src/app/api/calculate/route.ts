@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { getPowerHp } from '@/lib/power-map'
+
+const CUSTOMS_EUR_RATE = 87.403
+const USD_RATE = 70.95
+
+const supabase =
+  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+      )
+    : null
 
 // Получаем курс KRW с ЦБ РФ
 async function getKrwRate(): Promise<number> {
@@ -31,41 +43,145 @@ function getCarAge(year: number, month: number = 6): number {
   return diffMs / (1000 * 60 * 60 * 24 * 365.25)
 }
 
+function normalizeSpecText(value: unknown): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizeFuelForSpec(value: unknown): string {
+  const text = normalizeSpecText(value)
+  if (!text) return ''
+  if (text.includes('디젤') || text.includes('diesel')) return 'diesel'
+  if (text.includes('lpg') || text.includes('lpi') || text.includes('lpe')) return 'lpg'
+  if (text.includes('하이브리드') || text.includes('hybrid') || text.includes('hev')) return 'hybrid'
+  if (text.includes('가솔린+전기')) return 'hybrid'
+  if (text.includes('전기') || text.includes('electric')) return 'electric'
+  if (text.includes('가솔린') || text.includes('gasoline')) return 'gasoline'
+  return text
+}
+
+async function getVerifiedPowerHp(input: {
+  brand: string
+  model: string
+  badgeDetail: string
+  fuelType?: string
+  engineCc: number
+  year: number
+}): Promise<number | null> {
+  if (!supabase || !input.badgeDetail || !input.engineCc) return null
+
+  const { data, error } = await supabase
+    .from('vehicle_specs')
+    .select('power_hp,drive_type,year_from,year_to,fuel_type_norm')
+    .ilike('brand', input.brand)
+    .ilike('model', input.model)
+    .eq('badge_detail_norm', normalizeSpecText(input.badgeDetail))
+    .eq('engine_cc', input.engineCc)
+    .eq('verification_status', 'verified')
+    .not('power_hp', 'is', null)
+
+  if (error || !data?.length) return null
+
+  const fuelNorm = normalizeFuelForSpec(input.fuelType)
+  const spec = data.find((row) => {
+    if (row.fuel_type_norm && row.fuel_type_norm !== fuelNorm) return false
+    if (row.year_from && input.year < row.year_from) return false
+    if (row.year_to && input.year > row.year_to) return false
+    return true
+  })
+
+  return spec?.power_hp ?? null
+}
+
 // Утилизационный сбор 2025 для физлиц
 // Зависит от мощности и возраста авто
-function getUtilSbor(powerHp: number, year: number, month: number = 6): number {
-  const BASE = 20000
-  const ageYears = getCarAge(year, month)
+function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number {
+  const smallCc = engineCc <= 2000
+  const midCc = engineCc <= 3000
 
-  function coeff(hp: number, isNew: boolean, isOld: boolean): number {
-    if (isNew) {
-      if (hp <= 90) return 5.93
-      if (hp <= 150) return 17.07
-      if (hp <= 200) return 44.24
-      if (hp <= 300) return 140.52
-      if (hp <= 400) return 149.44
-      if (hp <= 500) return 347.18
-      return 714.94
-    } else if (isOld) {
-      if (hp <= 90) return 1.67
-      if (hp <= 150) return 6.31
-      if (hp <= 200) return 12.98
-      if (hp <= 300) return 91.92
-      if (hp <= 400) return 107.44
-      if (hp <= 500) return 234.21
-      return 469.42
-    } else {
-      if (hp <= 90) return 1.67
-      if (hp <= 150) return 6.31
-      if (hp <= 200) return 12.98
-      if (hp <= 300) return 17.57
-      if (hp <= 400) return 35.14
-      if (hp <= 500) return 60.75
-      return 122.38
+  if (isNew) {
+    if (smallCc) {
+      if (powerHp <= 160) return 0.17
+      if (powerHp <= 180) return 45.0
+      if (powerHp <= 200) return 47.64
+      if (powerHp <= 250) return 50.52
+      if (powerHp <= 270) return 57.12
+      if (powerHp <= 300) return 64.56
+      if (powerHp <= 350) return 83.16
+      if (powerHp <= 400) return 94.8
+      return 108.0
     }
+
+    if (midCc) {
+      if (powerHp <= 160) return 0.17
+      if (powerHp <= 180) return 115.34
+      if (powerHp <= 200) return 118.2
+      if (powerHp <= 250) return 120.12
+      if (powerHp <= 270) return 126.0
+      if (powerHp <= 300) return 131.04
+      if (powerHp <= 350) return 141.72
+      if (powerHp <= 400) return 147.48
+      return 153.36
+    }
+
+    if (powerHp <= 160) return 129.2
+    if (powerHp <= 180) return 131.76
+    if (powerHp <= 200) return 134.4
+    if (powerHp <= 250) return 137.16
+    if (powerHp <= 270) return 140.52
+    if (powerHp <= 300) return 144.0
+    if (powerHp <= 350) return 160.32
+    if (powerHp <= 400) return 169.2
+    return 178.44
   }
 
-  return Math.round(BASE * coeff(powerHp, ageYears < 3, ageYears >= 5))
+  if (smallCc) {
+    if (powerHp <= 160) return 0.26
+    if (powerHp <= 190) return 74.64
+    if (powerHp <= 220) return 79.2
+    if (powerHp <= 250) return 83.88
+    if (powerHp <= 270) return 91.92
+    if (powerHp <= 300) return 100.56
+    if (powerHp <= 350) return 120.6
+    if (powerHp <= 400) return 132.0
+    return 144.6
+  }
+
+  if (midCc) {
+    if (powerHp <= 160) return 0.26
+    if (powerHp <= 180) return 172.8
+    if (powerHp <= 200) return 175.08
+    if (powerHp <= 250) return 177.6
+    if (powerHp <= 270) return 183.0
+    if (powerHp <= 309) return 188.52
+    if (powerHp <= 340) return 193.68
+    if (powerHp <= 369) return 199.08
+    if (powerHp <= 400) return 204.72
+    return 210.48
+  }
+
+  if (powerHp <= 160) return 197.81
+  if (powerHp <= 180) return 200.04
+  if (powerHp <= 200) return 202.2
+  if (powerHp <= 250) return 204.36
+  if (powerHp <= 270) return 207.24
+  if (powerHp <= 300) return 212.4
+  if (powerHp <= 350) return 224.28
+  if (powerHp <= 400) return 231.0
+  return 237.96
+}
+
+function getUtilSbor(
+  powerHp: number,
+  engineCc: number,
+  year: number,
+  month: number = 6,
+): number {
+  const BASE = 20000
+  const age = getCarAge(year, month)
+  return Math.round(BASE * getUtilCoeff(powerHp, engineCc, age < 3))
 }
 
 // Таможенная пошлина РФ для физлиц (авто 3-5 лет из Кореи)
@@ -77,10 +193,8 @@ function getCustomsDuty(
   year: number,
   month: number = 6,
 ): { duty: number; fees: number } {
-  const EUR_RATE = 78.5
-  const USD_RATE = 70.95
   const priceRub = priceKrw * krwRate
-  const priceEur = priceRub / EUR_RATE
+  const priceEur = priceRub / CUSTOMS_EUR_RATE
   const ageYears = getCarAge(year, month)
 
   let duty: number
@@ -94,8 +208,8 @@ function getCustomsDuty(
       : engineCc <= 2300 ? 3.5
       : engineCc <= 3000 ? 3.5
       : 3.5
-    const dutyByVolume = engineCc * eurPerCc * EUR_RATE
-    const dutyByValue = priceEur * 0.48 * EUR_RATE
+    const dutyByVolume = engineCc * eurPerCc * CUSTOMS_EUR_RATE
+    const dutyByValue = priceEur * 0.48 * CUSTOMS_EUR_RATE
     duty = Math.round(Math.max(dutyByVolume, dutyByValue))
   } else if (ageYears <= 5) {
     // 3-5 лет: по объёму
@@ -106,8 +220,8 @@ function getCustomsDuty(
       : engineCc <= 2300 ? 2.7
       : engineCc <= 3000 ? 3.0
       : 3.6
-    const dutyByVolume = engineCc * eurPerCc * EUR_RATE
-    const dutyByValue = priceEur * 0.154 * EUR_RATE
+    const dutyByVolume = engineCc * eurPerCc * CUSTOMS_EUR_RATE
+    const dutyByValue = priceEur * 0.154 * CUSTOMS_EUR_RATE
     duty = Math.round(Math.max(dutyByVolume, dutyByValue))
   } else {
     // Старше 5 лет: повышенные ставки
@@ -118,8 +232,8 @@ function getCustomsDuty(
       : engineCc <= 2300 ? 4.8
       : engineCc <= 3000 ? 5.0
       : 5.7
-    const dutyByVolume = engineCc * eurPerCc * EUR_RATE
-    const dutyByValue = priceEur * 0.2 * EUR_RATE
+    const dutyByVolume = engineCc * eurPerCc * CUSTOMS_EUR_RATE
+    const dutyByValue = priceEur * 0.2 * CUSTOMS_EUR_RATE
     duty = Math.round(Math.max(dutyByVolume, dutyByValue))
   }
 
@@ -150,11 +264,21 @@ export async function POST(req: NextRequest) {
     // Получаем актуальный курс ЦБ
     const krwRate = await getKrwRate()
 
-    // Получаем мощность из маппинга
+    const verifiedPowerHp = await getVerifiedPowerHp({
+      brand,
+      model,
+      badgeDetail,
+      fuelType: body.fuel_type ?? '',
+      engineCc,
+      year,
+    })
+
+    // Verified vehicle_specs overrides stale car.power_hp values.
     const powerHp =
-      Number(body.power_hp) > 0
+      verifiedPowerHp ??
+      (Number(body.power_hp) > 0
         ? Number(body.power_hp)
-        : getPowerHp(brand, model, engineCc, badgeDetail)
+        : getPowerHp(brand, model, engineCc, badgeDetail))
 
     const carPriceRub = Math.round(priceKrw * krwRate)
 
@@ -172,7 +296,7 @@ export async function POST(req: NextRequest) {
         month,
       )
       // Утиль
-      const utilRub = getUtilSbor(powerHp, year, month)
+      const utilRub = getUtilSbor(powerHp, engineCc, year, month)
 
       const totalRub =
         carPriceRub + freightRub + brokerRub + dutyRub + feesRub + utilRub

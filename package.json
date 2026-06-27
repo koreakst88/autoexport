@@ -5,6 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "parse:cars": "node encar-parser.mjs",
+    "parse:cars:500": "ENCAR_TARGET=500 ENCAR_MAX_PAGES=80 SYNC_AVAILABILITY=false node encar-parser.mjs",
+    "parse:cars:sync": "ENCAR_TARGET=500 ENCAR_MAX_PAGES=80 SYNC_AVAILABILITY=true node encar-parser.mjs",
+    "specs:sync": "node vehicle-specs-sync.mjs",
+    "calc:audit": "node calc-audit.mjs",
+    "calc:audit:seed": "node calc-audit-seed.mjs",
+    "calc:audit:korex": "node korex-audit-import.mjs",
     "start": "next start",
     "lint": "next lint"
   },

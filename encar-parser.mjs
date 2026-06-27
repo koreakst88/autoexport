@@ -11,7 +11,13 @@ const dateFrom = ninetyDaysAgo.toISOString().slice(0, 10).replace(/-/g, "");
 const ENCAR_FILTER =
   "(And.Hidden.N._.CarType.Y._.Year.range(201900..)._.Mileage.range(..100000)._.Price.range(700..3000).)";
 const ENCAR_PAGE_SIZE = 50;
-const ENCAR_MAX_PAGES = 7;
+const DEFAULT_TARGET_COUNT = 50;
+const DEFAULT_MAX_PAGES = 7;
+const TARGET_COUNT = parsePositiveInt(process.env.ENCAR_TARGET, DEFAULT_TARGET_COUNT);
+const ENCAR_MAX_PAGES = parsePositiveInt(process.env.ENCAR_MAX_PAGES, DEFAULT_MAX_PAGES);
+const SYNC_AVAILABILITY = process.env.SYNC_AVAILABILITY !== "false";
+const DETAIL_DELAY_MS = parsePositiveInt(process.env.ENCAR_DETAIL_DELAY_MS, 300);
+const PAGE_DELAY_MS = parsePositiveInt(process.env.ENCAR_PAGE_DELAY_MS, 1000);
 
 const ENCAR_HEADERS = {
   "User-Agent":
@@ -227,6 +233,79 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
+let verifiedVehicleSpecs = [];
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeSpecText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeFuelForSpec(value) {
+  const text = normalizeSpecText(value);
+  if (!text) return "";
+  if (text.includes("디젤") || text.includes("diesel")) return "diesel";
+  if (text.includes("lpg") || text.includes("lpi") || text.includes("lpe")) return "lpg";
+  if (text.includes("하이브리드") || text.includes("hybrid") || text.includes("hev")) return "hybrid";
+  if (text.includes("가솔린+전기")) return "hybrid";
+  if (text.includes("전기") || text.includes("electric")) return "electric";
+  if (text.includes("가솔린") || text.includes("gasoline")) return "gasoline";
+  return text;
+}
+
+async function loadVerifiedVehicleSpecs() {
+  const { data, error } = await supabase
+    .from("vehicle_specs")
+    .select("id,brand,model,badge_detail_norm,fuel_type_norm,engine_cc,drive_type,year_from,year_to,power_hp")
+    .eq("verification_status", "verified")
+    .not("power_hp", "is", null);
+
+  if (error) {
+    console.warn("vehicle_specs недоступна, используем локальные карты мощности:", error.message);
+    verifiedVehicleSpecs = [];
+    return;
+  }
+
+  verifiedVehicleSpecs = data ?? [];
+}
+
+function resolvePowerFromVehicleSpecs({ brand, model, engineCc, badgeDetail, fuelType, driveType, year }) {
+  const brandNorm = normalizeSpecText(brand);
+  const modelNorm = normalizeSpecText(model);
+  const badgeNorm = normalizeSpecText(badgeDetail);
+  const fuelNorm = normalizeFuelForSpec(fuelType);
+  const driveNorm = normalizeSpecText(normalizeDriveForSpec(driveType));
+  const cc = Number(engineCc) || 0;
+  const carYear = Number(year) || 0;
+
+  const spec = verifiedVehicleSpecs.find((item) => {
+    if (normalizeSpecText(item.brand) !== brandNorm) return false;
+    if (normalizeSpecText(item.model) !== modelNorm) return false;
+    if (item.badge_detail_norm !== badgeNorm) return false;
+    if (Number(item.engine_cc) !== cc) return false;
+    if (item.fuel_type_norm && item.fuel_type_norm !== fuelNorm) return false;
+    if (item.drive_type && normalizeSpecText(item.drive_type) !== driveNorm) return false;
+    if (item.year_from && carYear && carYear < item.year_from) return false;
+    if (item.year_to && carYear && carYear > item.year_to) return false;
+    return true;
+  });
+
+  if (!spec) return null;
+
+  return {
+    power: spec.power_hp,
+    source: "vehicle_specs",
+    note: `vehicle_specs:${spec.id}`,
+    specId: spec.id,
+  };
+}
+
 function buildEncarUrl(offset) {
   const query = encodeURIComponent(ENCAR_FILTER);
   // В API Encar валидное имя сортировки для "самые новые" — CreatedDate.
@@ -291,6 +370,12 @@ function parseDriveType(badge) {
   if (text.includes("FWD")) return "FWD";
   if (text.includes("RWD")) return "RWD";
   return null;
+}
+
+function normalizeDriveForSpec(driveType) {
+  if (!driveType) return null;
+  if (driveType === "4WD") return "AWD";
+  return driveType;
 }
 
 // Маппинг модель → объём по умолчанию
@@ -365,6 +450,227 @@ function normalizeEngineCc(value) {
   return Math.round(cc);
 }
 
+const PARSER_BADGE_POWER_MAP = {
+  "gasoline 1.6 turbo 2wd_1598": 180,
+  "gasoline 1.6 turbo 2wd_1591": 177,
+  "gasoline 2.0t 2wd_1998": 252,
+  "gasoline 2.0t 4wd_1998": 252,
+  "gasoline 2.5t 2wd_2497": 290,
+  "diesel 2.0 2wd_1998": 186,
+  "diesel 2.0 2wd_1995": 186,
+  "diesel 2.2 2wd_2157": 202,
+  "diesel 2.2 2wd_2151": 202,
+  "diesel 2.2 4wd_2157": 202,
+  "diesel 2.2 4wd_2151": 202,
+  "2.5_2497": 202,
+  "2.5 awd masters_2497": 202,
+  "2.0_1999": 160,
+  "2.0 lpi_1999": 152,
+  "2.0 lpe re 2wd_1998": 152,
+  "2.0 lpi(rent)_1999": 152,
+  "1.6_1598": 180,
+  "1.6 turbo_1598": 180,
+  "7-seater limousine_2199": 202,
+  "9-seater noblesse_2151": 202,
+  "9-seater noblesse_2199": 202,
+  "9-seater prstige_2199": 202,
+  "cargo 5-seater_2199": 202,
+  "hev 9seater nobless_1598": 180,
+  "premium plus_1999": 180,
+  "prestige_1999": 180,
+  "inspiration_1580": 180,
+  "inspiration 2wd_1598": 180,
+  "modern_1999": 180,
+  "2.0 gde le signature 2wd_1997": 160,
+  "gasoline_1999": 160,
+  "gasoline 3.5 turbo awd_3470": 380,
+  "2.5t gasoline awd_2497": 304,
+  "2.2 diesel 2wd_2151": 202,
+  "3.0 diesel 2wd_2996": 278,
+  "3.5t gasoline awd_3470": 380,
+  "3.3 gdi awd_3342": 282,
+  "gasoline 2.5t 4wd_2497": 281,
+  "4wd wagon 12-seater_2497": 175,
+  "smart_1580": 105,
+  "2.0 n_1998": 280,
+  "1.6 lpi_1591": 120,
+  "exclusive_1598": 180,
+  "premium_1598": 180,
+  "3.5 lpg 2wd_3470": 240,
+  "hev 1.6 cargo 5-seater_1598": 180,
+  "hev 1.5 2wd_1498": 170,
+  "hev 1.6 2wd_1580": 105,
+  "gasoline 9-seater noblesse special_3342": 280,
+  "gasoline 7-seater limousine_3342": 280,
+  "2.5 masters_2497": 304,
+};
+
+const PARSER_MODEL_POWER_MAP = {
+  "hyundai_tucson_1598": 150,
+  "hyundai_tucson_1998": 186,
+  "hyundai_tucson_1999": 186,
+  "hyundai_tucson_2151": 186,
+  "hyundai_tucson_2199": 186,
+  "hyundai_santafe_2151": 202,
+  "hyundai_santafe_2157": 202,
+  "hyundai_santafe_2199": 202,
+  "hyundai_santafe_1598": 180,
+  "hyundai_grandeur_2497": 202,
+  "hyundai_grandeur_2999": 248,
+  "hyundai_grandeur_2359": 180,
+  "hyundai_grandeur_2398": 180,
+  "hyundai_sonata_1598": 180,
+  "hyundai_sonata_1999": 160,
+  "hyundai_staria_2199": 177,
+  "hyundai_staria_3470": 294,
+  "hyundai_staria_3497": 272,
+  "hyundai_elantra_1598": 123,
+  "hyundai_elantra_1999": 158,
+  "hyundai_venue_1598": 123,
+  "hyundai_venue_1591": 123,
+  "kia_carnival_2199": 202,
+  "kia_carnival_2151": 202,
+  "kia_carnival_3470": 294,
+  "kia_carnival_3497": 272,
+  "kia_carnival_1598": 180,
+  "kia_sportage_1598": 180,
+  "kia_sportage_1591": 177,
+  "kia_sportage_1999": 150,
+  "kia_sportage_1998": 150,
+  "kia_sportage_2151": 202,
+  "kia_sportage_2199": 202,
+  "kia_k5_1598": 180,
+  "kia_k5_1999": 160,
+  "kia_k5_1998": 160,
+  "kia_k5_2497": 202,
+  "kia_k8_2497": 202,
+  "kia_k8_2999": 248,
+  "kia_k8_3470": 300,
+  "kia_k8_1598": 180,
+  "kia_k8_1591": 180,
+  "kia_seltos_1598": 177,
+  "kia_seltos_1591": 177,
+  "kia_seltos_1999": 150,
+  "kia_seltos_1998": 150,
+  "kia_stinger_1998": 252,
+  "kia_stinger_3342": 370,
+  "genesis_g70_1998": 252,
+  "genesis_g70_3342": 370,
+  "genesis_g80_2497": 202,
+  "genesis_g80_2999": 278,
+  "genesis_g80_3470": 380,
+  "genesis_g80_3497": 380,
+  "genesis_gv70_1998": 252,
+  "genesis_gv70_2151": 202,
+  "genesis_gv70_2497": 304,
+  "genesis_gv80_2497": 277,
+  "genesis_gv80_2996": 278,
+  "genesis_gv80_3470": 380,
+  "genesis_gv80_2999": 380,
+  "kgm_rexton_1998": 177,
+  "kgm_rexton_2157": 181,
+  "kgm_torres_1497": 170,
+  "renaultkorea_qm6_1998": 144,
+  "renaultkorea_qm6_1997": 144,
+  "renaultkorea_qm6_1461": 160,
+};
+
+function estimatePowerByEngine(engineCc) {
+  if (engineCc <= 1000) return 75;
+  if (engineCc <= 1400) return 100;
+  if (engineCc <= 1600) return 130;
+  if (engineCc <= 2000) return 150;
+  if (engineCc <= 2500) return 200;
+  if (engineCc <= 3000) return 250;
+  return 300;
+}
+
+function getPowerHpForParser(brand, model, engineCc, badgeDetail) {
+  const cc = Number(engineCc) || 0;
+
+  if (badgeDetail) {
+    const badge = String(badgeDetail).toLowerCase().trim();
+    const badgeKey = `${badge}_${cc}`;
+    if (PARSER_BADGE_POWER_MAP[badgeKey]) {
+      return { power: PARSER_BADGE_POWER_MAP[badgeKey], source: "badge_detail" };
+    }
+    if (PARSER_BADGE_POWER_MAP[badge]) {
+      return { power: PARSER_BADGE_POWER_MAP[badge], source: "badge_detail" };
+    }
+  }
+
+  const brandKey = String(brand ?? "").toLowerCase().replace(/\s+/g, "").replace(/-/g, "");
+  const modelKey = String(model ?? "").toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
+  const exactKey = `${brandKey}_${modelKey}_${cc}`;
+  if (PARSER_MODEL_POWER_MAP[exactKey]) {
+    return { power: PARSER_MODEL_POWER_MAP[exactKey], source: "brand_model_engine" };
+  }
+
+  return { power: estimatePowerByEngine(cc), source: "engine_fallback" };
+}
+
+function detectUsage(car) {
+  const text = `${car.Badge ?? ""} ${car.BadgeDetail ?? ""}`.toLowerCase();
+  const isRental = text.includes("렌터카") || text.includes("rent");
+  const isTaxi = text.includes("택시") || text.includes("taxi");
+  const isCommercial =
+    text.includes("화물") ||
+    text.includes("cargo") ||
+    text.includes("밴") ||
+    text.includes("어린이보호차") ||
+    text.includes("앰뷸런스");
+
+  let usageType = "private";
+  if (isTaxi) usageType = "taxi";
+  else if (isRental) usageType = "rental";
+  else if (isCommercial) usageType = "commercial";
+
+  return { usageType, isRental, isTaxi, isCommercial };
+}
+
+function buildDataQuality(mappedCar) {
+  const warnings = [];
+  let score = 100;
+
+  if (!mappedCar.engine_cc) {
+    score -= 20;
+    warnings.push("missing_engine_cc");
+  }
+  if (!mappedCar.power_hp || mappedCar.power_source === "engine_fallback") {
+    score -= 15;
+    warnings.push("estimated_power_hp");
+  }
+  if (!mappedCar.color) {
+    score -= 8;
+    warnings.push("missing_color");
+  }
+  if (!mappedCar.first_registration_korea) {
+    score -= 12;
+    warnings.push("missing_first_registration_korea");
+  }
+  if (!mappedCar.badge_detail) {
+    score -= 10;
+    warnings.push("missing_badge_detail");
+  }
+  if (!Array.isArray(mappedCar.photos) || mappedCar.photos.length === 0) {
+    score -= 15;
+    warnings.push("missing_photos");
+  }
+  if (mappedCar.usage_type !== "private") {
+    score -= 20;
+    warnings.push(`usage_${mappedCar.usage_type}`);
+  }
+  if (mappedCar.has_accident) {
+    score -= 15;
+    warnings.push("has_accident");
+  }
+
+  return {
+    data_confidence: Math.max(0, Math.min(100, score)),
+    data_warnings: warnings,
+  };
+}
+
 function isSngReady(car) {
   const modelName = String(car.Model ?? "");
   const badge = String(car.Badge ?? "");
@@ -435,7 +741,15 @@ async function fetchVehicleDetail(vehicleId) {
       grade_english: category.gradeEnglishName ?? null,
       registered_at_encar: manage.registDateTime ?? null,
       vehicle_no: data.vehicleNo ?? null,
+      vin: spec.vin ?? data.vin ?? null,
       transmission: spec.transmissionName ?? null,
+      raw: {
+        vehicleId,
+        vehicleNo: data.vehicleNo ?? null,
+        spec,
+        manage,
+        category,
+      },
     };
   } catch {
     return {};
@@ -457,26 +771,42 @@ async function fetchOptions(vehicleId) {
 }
 
 async function mapCar(car) {
-  await sleep(300);
+  await sleep(DETAIL_DELAY_MS);
   const detail = await fetchVehicleDetail(car.Id);
-  await sleep(300);
+  await sleep(DETAIL_DELAY_MS);
   const options = await fetchOptions(car.Id);
-  await sleep(500);
+  await sleep(DETAIL_DELAY_MS);
+  const brand = BRAND_MAP[car.Manufacturer] ?? car.Manufacturer;
+  const model = translateModel(car.Model);
+  const badgeDetail = detail.grade_english ?? car.BadgeDetail ?? null;
+  const engineCc =
+    normalizeEngineCc(detail.displacement) ||
+    (car.Displacement && car.Displacement > 0 ? car.Displacement : 0) ||
+    parseEngineFromBadge(car.Badge, model, car.FuelType);
+  const driveType = parseDriveType(car.Badge) ?? parseDriveType(car.BadgeDetail) ?? null;
+  const power =
+    resolvePowerFromVehicleSpecs({
+      brand,
+      model,
+      engineCc,
+      badgeDetail,
+      fuelType: car.FuelType,
+      driveType,
+      year: Number(String(car.Year).slice(0, 4)),
+    }) ?? getPowerHpForParser(brand, model, engineCc, badgeDetail);
+  const usage = detectUsage(car);
   const listingUpdatedAt = car.Photos?.[0]?.updatedDate ?? null;
   const registeredAt =
     detail.registered_at_encar ?? listingUpdatedAt ?? new Date().toISOString();
 
-  return {
+  const mappedCar = {
     encar_id: String(car.Id),
-    brand: BRAND_MAP[car.Manufacturer] ?? car.Manufacturer,
-    model: translateModel(car.Model),
+    brand,
+    model,
     year: Number(String(car.Year).slice(0, 4)),
     body_type: getBodyType(car.Model),
     mileage: car.Mileage,
-    engine_cc:
-      normalizeEngineCc(detail.displacement) ||
-      (car.Displacement && car.Displacement > 0 ? car.Displacement : 0) ||
-      parseEngineFromBadge(car.Badge, translateModel(car.Model), car.FuelType),
+    engine_cc: engineCc,
     fuel_type: car.FuelType ?? "gasoline",
     transmission: detail.transmission ?? car.Transmission ?? null,
     color: detail.color ?? null,
@@ -484,19 +814,66 @@ async function mapCar(car) {
     price_krw: car.Price * 10000,
     photos: buildPhotos(car),
     raw_url: `https://www.encar.com/dc/dc_cardetailview.do?carid=${car.Id}`,
-    vin: null,
+    vin: detail.vin ?? null,
     first_registration_korea: parseKoreaRegDate(car.Year),
-    power_hp: null,
+    power_hp: power.power,
+    power_source: power.source,
+    power_note: power.note ?? (badgeDetail ? `${badgeDetail}_${engineCc}` : `${brand}_${model}_${engineCc}`),
+    vehicle_spec_id: power.specId ?? null,
+    power_verified: power.source === "vehicle_specs",
     seats: detail.seats ?? null,
     options,
-    drive_type: parseDriveType(car.Badge) ?? parseDriveType(car.BadgeDetail) ?? null,
+    drive_type: driveType,
     badge: car.Badge ?? null,
-    badge_detail: detail.grade_english ?? car.BadgeDetail ?? null,
+    badge_detail: badgeDetail,
+    hybrid_type:
+      String(car.FuelType ?? "").includes("전기") || String(car.Badge ?? "").toUpperCase().includes("HEV")
+        ? "hybrid"
+        : null,
+    usage_type: usage.usageType,
+    is_rental: usage.isRental,
+    is_taxi: usage.isTaxi,
+    is_commercial: usage.isCommercial,
+    accident_history: {
+      has_accident: car.HasAccident ?? false,
+    },
+    insurance_history: {},
+    insurance_payout_count: null,
+    insurance_payout_total_krw: null,
+    owners_count: null,
+    inspection_status: detail.raw ? "vehicle_detail_ok" : "vehicle_detail_missing",
+    vehicle_no: detail.vehicle_no ?? null,
+    source_detail_payload: {
+      list: {
+        id: car.Id,
+        manufacturer: car.Manufacturer ?? null,
+        model: car.Model ?? null,
+        badge: car.Badge ?? null,
+        badgeDetail: car.BadgeDetail ?? null,
+        year: car.Year ?? null,
+        mileage: car.Mileage ?? null,
+        price: car.Price ?? null,
+        fuelType: car.FuelType ?? null,
+        transmission: car.Transmission ?? null,
+        displacement: car.Displacement ?? null,
+        hasAccident: car.HasAccident ?? null,
+        photosCount: Array.isArray(car.Photos) ? car.Photos.length : 0,
+      },
+      detail: detail.raw ?? null,
+      options_count: Array.isArray(options) ? options.length : 0,
+      fetched_at: new Date().toISOString(),
+    },
     // Для "свежести" используем дату обновления фото (если есть), иначе текущую.
     modified_at_encar: listingUpdatedAt ?? new Date().toISOString(),
     registered_at_encar: registeredAt,
     is_sng_ready: true,
     is_available: true,
+  };
+
+  const quality = buildDataQuality(mappedCar);
+  return {
+    ...mappedCar,
+    ...quality,
   };
 }
 
@@ -518,7 +895,7 @@ async function fetchEncarPage(offset) {
   return results;
 }
 
-async function fetchAllSngCars(target = 50) {
+async function fetchAllSngCars(target = TARGET_COUNT) {
   const result = [];
   const seenIds = new Set();
   let receivedCount = 0;
@@ -560,7 +937,7 @@ async function fetchAllSngCars(target = 50) {
       result.length < target &&
       offset < ENCAR_MAX_PAGES * ENCAR_PAGE_SIZE
     ) {
-      await sleep(1000);
+      await sleep(PAGE_DELAY_MS);
     }
   }
 
@@ -585,6 +962,21 @@ async function saveCarsToSupabase(cars) {
     return { savedCount: 0, errorCount: cars.length };
   }
 
+  if (SYNC_AVAILABILITY) {
+    const ids = cars.map((car) => String(car.encar_id).replaceAll('"', '\\"'));
+    const idFilter = `(${ids.map((id) => `"${id}"`).join(",")})`;
+    const { error: availabilityError } = await supabase
+      .from("cars")
+      .update({ is_available: false })
+      .eq("is_available", true)
+      .not("encar_id", "in", idFilter);
+
+    if (availabilityError) {
+      console.error("Ошибка обновления доступности:", availabilityError.message);
+      return { savedCount: cars.length, errorCount: cars.length };
+    }
+  }
+
   return { savedCount: cars.length, errorCount: 0 };
 }
 
@@ -596,7 +988,19 @@ async function main() {
   let mappedCars = [];
 
   try {
-    const sngCars = await fetchAllSngCars(50);
+    console.log("Настройки парсера:", {
+      target: TARGET_COUNT,
+      maxPages: ENCAR_MAX_PAGES,
+      pageSize: ENCAR_PAGE_SIZE,
+      syncAvailability: SYNC_AVAILABILITY,
+      detailDelayMs: DETAIL_DELAY_MS,
+      pageDelayMs: PAGE_DELAY_MS,
+    });
+
+    await loadVerifiedVehicleSpecs();
+    console.log(`Загружено проверенных спецификаций: ${verifiedVehicleSpecs.length}`);
+
+    const sngCars = await fetchAllSngCars(TARGET_COUNT);
     receivedCount = sngCars.receivedCount;
     filteredCount = sngCars.filteredCount;
 
