@@ -131,6 +131,11 @@ function formatNumber(value: number | null | undefined) {
   return value.toLocaleString("ru-RU");
 }
 
+function formatPower(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return "—";
+  return `${value.toLocaleString("ru-RU")} л.с.`;
+}
+
 function getPriceBreakdown(result: CalcResult, car: CarDetailCar, countryCode: string) {
   const cur = result.currency;
   const rateMap: Record<string, number> = {
@@ -574,6 +579,12 @@ export function CarDetailClient({
           <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
             <span className="text-xs text-gray-500">Двигатель:</span>
             <span className="text-xs font-medium text-gray-900 text-right">{engineDisplay}</span>
+          </div>
+          <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
+            <span className="text-xs text-gray-500">Мощность:</span>
+            <span className="text-xs font-medium text-gray-900 text-right">
+              {formatPower(car.power_hp)}
+            </span>
           </div>
           <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
             <span className="text-xs text-gray-500">КПП:</span>
