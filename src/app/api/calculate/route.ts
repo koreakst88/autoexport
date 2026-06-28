@@ -128,6 +128,7 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
       if (powerHp <= 160) return 0.17
       if (powerHp <= 180) return 45.0
       if (powerHp <= 200) return 45.0
+      if (powerHp <= 220) return 47.64
       if (powerHp <= 250) return 50.52
       if (powerHp <= 270) return 57.12
       if (powerHp <= 300) return 64.56
@@ -140,12 +141,13 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
       if (powerHp <= 160) return 0.17
       if (powerHp <= 180) return 115.34
       if (powerHp <= 200) return 118.2
+      if (powerHp <= 220) return 118.2
       if (powerHp <= 250) return 120.12
       if (powerHp <= 270) return 126.0
       if (powerHp <= 309) return 131.04
-      if (powerHp <= 350) return 141.72
+      if (powerHp <= 350) return 136.32
       if (powerHp <= 400) return 147.48
-      return 153.36
+      return 159.48
     }
 
     if (powerHp <= 160) return 129.2
@@ -156,7 +158,7 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
     if (powerHp <= 300) return 144.0
     if (powerHp <= 350) return 160.32
     if (powerHp <= 400) return 169.2
-    return 178.44
+    return 229.08
   }
 
   if (smallCc) {
@@ -164,7 +166,8 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
     if (powerHp <= 190) return 74.64
     if (powerHp <= 220) return 79.2
     if (powerHp <= 250) return 83.88
-    if (powerHp <= 300) return 91.92
+    if (powerHp <= 270) return 91.92
+    if (powerHp <= 300) return 100.56
     if (powerHp <= 350) return 120.6
     if (powerHp <= 400) return 132.0
     return 144.6
@@ -175,12 +178,13 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
     if (powerHp <= 190) return 172.8
     if (powerHp <= 220) return 175.08
     if (powerHp <= 250) return 177.6
-    if (powerHp <= 300) return 183.0
+    if (powerHp <= 270) return 183.0
+    if (powerHp <= 300) return 188.52
     if (powerHp <= 309) return 188.52
     if (powerHp <= 340) return 193.68
     if (powerHp <= 369) return 199.08
     if (powerHp <= 400) return 204.72
-    return 210.48
+    return 216.36
   }
 
   if (powerHp <= 160) return 197.81
@@ -191,7 +195,7 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
   if (powerHp <= 300) return 212.4
   if (powerHp <= 350) return 224.28
   if (powerHp <= 400) return 231.0
-  return 237.96
+  return 344.28
 }
 
 function getUtilSbor(
