@@ -14,7 +14,7 @@ export default async function CatalogPage(props: {
     .select("*")
     .eq("is_available", true)
     .order("registered_at_encar", { ascending: false })
-    .limit(50);
+    .limit(1000);
 
   if (error) {
     console.error("Supabase cars query error:", error.message);
