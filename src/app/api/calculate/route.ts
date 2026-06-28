@@ -4,6 +4,7 @@ import { getPowerHp } from '@/lib/power-map'
 
 const CUSTOMS_EUR_RATE = 87.403
 const USD_RATE = 70.95
+const DEFAULT_CLEARANCE_DAYS = 90
 
 const supabase =
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -36,11 +37,32 @@ async function getKrwRate(): Promise<number> {
   return 0.0472 // fallback на случай недоступности ЦБ
 }
 
-function getCarAge(year: number, month: number = 6): number {
-  const now = new Date()
-  const regDate = new Date(year, month - 1, 1)
-  const diffMs = now.getTime() - regDate.getTime()
+function getEstimatedClearanceDate(days = DEFAULT_CLEARANCE_DAYS): Date {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date
+}
+
+function getCarAge(
+  year: number,
+  month: number = 6,
+  clearanceDate: Date = getEstimatedClearanceDate(),
+): number {
+  const releaseDate = new Date(year, month - 1, 15)
+  const diffMs = clearanceDate.getTime() - releaseDate.getTime()
   return diffMs / (1000 * 60 * 60 * 24 * 365.25)
+}
+
+function getAgeState(year: number, month: number, clearanceDate: Date) {
+  const clearanceAge = getCarAge(year, month, clearanceDate)
+  const currentAge = getCarAge(year, month, new Date())
+
+  return {
+    clearanceAge,
+    currentAge,
+    isNew: clearanceAge < 3,
+    isOld: currentAge > 5,
+  }
 }
 
 function normalizeSpecText(value: unknown): string {
@@ -120,7 +142,7 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
       if (powerHp <= 200) return 118.2
       if (powerHp <= 250) return 120.12
       if (powerHp <= 270) return 126.0
-      if (powerHp <= 300) return 131.04
+      if (powerHp <= 309) return 131.04
       if (powerHp <= 350) return 141.72
       if (powerHp <= 400) return 147.48
       return 153.36
@@ -142,8 +164,7 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
     if (powerHp <= 190) return 74.64
     if (powerHp <= 220) return 79.2
     if (powerHp <= 250) return 83.88
-    if (powerHp <= 270) return 91.92
-    if (powerHp <= 300) return 100.56
+    if (powerHp <= 300) return 91.92
     if (powerHp <= 350) return 120.6
     if (powerHp <= 400) return 132.0
     return 144.6
@@ -151,10 +172,10 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
 
   if (midCc) {
     if (powerHp <= 160) return 0.26
-    if (powerHp <= 180) return 172.8
-    if (powerHp <= 200) return 175.08
+    if (powerHp <= 190) return 172.8
+    if (powerHp <= 220) return 175.08
     if (powerHp <= 250) return 177.6
-    if (powerHp <= 270) return 183.0
+    if (powerHp <= 300) return 183.0
     if (powerHp <= 309) return 188.52
     if (powerHp <= 340) return 193.68
     if (powerHp <= 369) return 199.08
@@ -178,10 +199,11 @@ function getUtilSbor(
   engineCc: number,
   year: number,
   month: number = 6,
+  clearanceDate: Date = getEstimatedClearanceDate(),
 ): number {
   const BASE = 20000
-  const age = getCarAge(year, month)
-  return Math.round(BASE * getUtilCoeff(powerHp, engineCc, age < 3))
+  const ageState = getAgeState(year, month, clearanceDate)
+  return Math.round(BASE * getUtilCoeff(powerHp, engineCc, ageState.isNew))
 }
 
 // Таможенная пошлина РФ для физлиц (авто 3-5 лет из Кореи)
@@ -192,26 +214,27 @@ function getCustomsDuty(
   krwRate: number,
   year: number,
   month: number = 6,
+  clearanceDate: Date = getEstimatedClearanceDate(),
 ): { duty: number; fees: number } {
   const priceRub = priceKrw * krwRate
   const priceEur = priceRub / CUSTOMS_EUR_RATE
-  const ageYears = getCarAge(year, month)
+  const ageState = getAgeState(year, month, clearanceDate)
 
   let duty: number
 
-  if (ageYears < 3) {
+  if (ageState.isNew) {
     // Новые авто: 48% но не менее X евро за см³
-    const eurPerCc =
-      engineCc <= 1000 ? 2.5
-      : engineCc <= 1500 ? 3.5
-      : engineCc <= 1800 ? 3.5
-      : engineCc <= 2300 ? 3.5
-      : engineCc <= 3000 ? 3.5
-      : 3.5
+    const { eurPerCc, percentRate } =
+      priceEur <= 8500 ? { eurPerCc: 2.5, percentRate: 0.54 }
+      : priceEur <= 16700 ? { eurPerCc: 3.5, percentRate: 0.48 }
+      : priceEur <= 42300 ? { eurPerCc: 5.5, percentRate: 0.48 }
+      : priceEur <= 84500 ? { eurPerCc: 7.5, percentRate: 0.48 }
+      : priceEur <= 169000 ? { eurPerCc: 15.0, percentRate: 0.48 }
+      : { eurPerCc: 20.0, percentRate: 0.48 }
     const dutyByVolume = engineCc * eurPerCc * CUSTOMS_EUR_RATE
-    const dutyByValue = priceEur * 0.48 * CUSTOMS_EUR_RATE
+    const dutyByValue = priceEur * percentRate * CUSTOMS_EUR_RATE
     duty = Math.round(Math.max(dutyByVolume, dutyByValue))
-  } else if (ageYears <= 5) {
+  } else if (!ageState.isOld) {
     // 3-5 лет: по объёму
     const eurPerCc =
       engineCc <= 1000 ? 1.5
@@ -256,6 +279,7 @@ export async function POST(req: NextRequest) {
     const engineCc = Number(body.engine_cc) || 1600
     const year = Number(body.year) || new Date().getFullYear()
     const month = Number(body.month) || 6
+    const clearanceDays = Number(body.clearance_days) || DEFAULT_CLEARANCE_DAYS
     const brand = body.brand ?? ''
     const model = body.model ?? ''
     const badgeDetail = body.badge_detail ?? ''
@@ -281,6 +305,8 @@ export async function POST(req: NextRequest) {
         : getPowerHp(brand, model, engineCc, badgeDetail))
 
     const carPriceRub = Math.round(priceKrw * krwRate)
+    const clearanceDate = getEstimatedClearanceDate(clearanceDays)
+    const carAgeYears = getAgeState(year, month, clearanceDate).clearanceAge
 
     if (country === 'RU') {
       // Расходы в Корее + фрахт до Владивостока
@@ -294,9 +320,10 @@ export async function POST(req: NextRequest) {
         krwRate,
         year,
         month,
+        clearanceDate,
       )
       // Утиль
-      const utilRub = getUtilSbor(powerHp, engineCc, year, month)
+      const utilRub = getUtilSbor(powerHp, engineCc, year, month, clearanceDate)
 
       const totalRub =
         carPriceRub + freightRub + brokerRub + dutyRub + feesRub + utilRub
@@ -312,6 +339,8 @@ export async function POST(req: NextRequest) {
         util_rub: utilRub,
         total_rub: totalRub,
         power_hp: powerHp,
+        estimated_clearance_date: clearanceDate.toISOString(),
+        car_age_years: Number(carAgeYears.toFixed(3)),
         currency: '₽',
       })
     }
@@ -357,6 +386,8 @@ export async function POST(req: NextRequest) {
       total_rub: totalRub,
       total_local: totalLocal,
       power_hp: powerHp,
+      estimated_clearance_date: clearanceDate.toISOString(),
+      car_age_years: Number(carAgeYears.toFixed(3)),
       currency: CURRENCY[country] ?? '₽',
     })
   } catch (err) {

@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { calcFullPrice, getRegistrationMonth, type CalcResult } from "@/lib/calc";
+import {
+  calcFullPrice,
+  formatCalcDate,
+  getRegistrationMonth,
+  type CalcResult,
+} from "@/lib/calc";
 import { getFavorites, toggleFavorite } from "@/lib/favorites";
 import {
   translateBadge,
@@ -523,7 +528,9 @@ export function CarDetailClient({
 
             <div className="border-t border-gray-100 px-3 py-2">
               <p className="text-center text-xs text-gray-400">
-                {`Курс ЦБ: 1000₩ = ${(krwRate * 1000).toFixed(2)}₽ · Расчёт актуален`}
+                {calc
+                  ? `Курс ЦБ: 1000₩ = ${(krwRate * 1000).toFixed(2)}₽ · оформление ${formatCalcDate(calc.estimatedClearanceDate)}`
+                  : `Курс ЦБ: 1000₩ = ${(krwRate * 1000).toFixed(2)}₽`}
               </p>
             </div>
           </div>

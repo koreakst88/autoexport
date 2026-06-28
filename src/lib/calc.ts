@@ -19,11 +19,41 @@ export const KRW_TO_RUB = 0.04718
 
 const CUSTOMS_EUR_RATE = 87.403
 const USD_RATE = 70.95
+const DEFAULT_CLEARANCE_DAYS = 90
 
-function getCarAge(year: number, month: number = 6): number {
-  const now = new Date()
-  const regDate = new Date(year, month - 1, 1)
-  return (now.getTime() - regDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+function getEstimatedClearanceDate(days = DEFAULT_CLEARANCE_DAYS): Date {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date
+}
+
+export function formatCalcDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return '—'
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  return `${dd}.${mm}.${date.getFullYear()}`
+}
+
+function getCarAge(
+  year: number,
+  month: number = 6,
+  clearanceDate: Date = getEstimatedClearanceDate(),
+): number {
+  const releaseDate = new Date(year, month - 1, 15)
+  return (clearanceDate.getTime() - releaseDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+}
+
+function getAgeState(year: number, month: number, clearanceDate: Date) {
+  const clearanceAge = getCarAge(year, month, clearanceDate)
+  const currentAge = getCarAge(year, month, new Date())
+
+  return {
+    clearanceAge,
+    currentAge,
+    isNew: clearanceAge < 3,
+    isOld: currentAge > 5,
+  }
 }
 
 export function getRegistrationMonth(dateStr: string | null | undefined): number {
@@ -55,7 +85,7 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
       if (powerHp <= 200) return 118.2
       if (powerHp <= 250) return 120.12
       if (powerHp <= 270) return 126.0
-      if (powerHp <= 300) return 131.04
+      if (powerHp <= 309) return 131.04
       if (powerHp <= 350) return 141.72
       if (powerHp <= 400) return 147.48
       return 153.36
@@ -77,8 +107,7 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
     if (powerHp <= 190) return 74.64
     if (powerHp <= 220) return 79.2
     if (powerHp <= 250) return 83.88
-    if (powerHp <= 270) return 91.92
-    if (powerHp <= 300) return 100.56
+    if (powerHp <= 300) return 91.92
     if (powerHp <= 350) return 120.6
     if (powerHp <= 400) return 132.0
     return 144.6
@@ -86,10 +115,10 @@ function getUtilCoeff(powerHp: number, engineCc: number, isNew: boolean): number
 
   if (midCc) {
     if (powerHp <= 160) return 0.26
-    if (powerHp <= 180) return 172.8
-    if (powerHp <= 200) return 175.08
+    if (powerHp <= 190) return 172.8
+    if (powerHp <= 220) return 175.08
     if (powerHp <= 250) return 177.6
-    if (powerHp <= 270) return 183.0
+    if (powerHp <= 300) return 183.0
     if (powerHp <= 309) return 188.52
     if (powerHp <= 340) return 193.68
     if (powerHp <= 369) return 199.08
@@ -114,10 +143,11 @@ function getUtilSbor(
   engineCc: number,
   year: number,
   month: number = 6,
+  clearanceDate: Date = getEstimatedClearanceDate(),
 ): number {
   const BASE = 20000
-  const age = getCarAge(year, month)
-  return Math.round(BASE * getUtilCoeff(powerHp, engineCc, age < 3))
+  const ageState = getAgeState(year, month, clearanceDate)
+  return Math.round(BASE * getUtilCoeff(powerHp, engineCc, ageState.isNew))
 }
 
 function getCustomsDutyRu(
@@ -126,18 +156,36 @@ function getCustomsDutyRu(
   krwRate: number,
   year: number,
   month: number = 6,
+  clearanceDate: Date = getEstimatedClearanceDate(),
 ): number {
   const priceRub = priceKrw * krwRate
   const priceEur = priceRub / CUSTOMS_EUR_RATE
-  const age = getCarAge(year, month)
+  const ageState = getAgeState(year, month, clearanceDate)
 
   let eurPerCc: number
   let percentRate: number
 
-  if (age < 3) {
-    eurPerCc = 3.5
-    percentRate = 0.48
-  } else if (age <= 5) {
+  if (ageState.isNew) {
+    if (priceEur <= 8500) {
+      eurPerCc = 2.5
+      percentRate = 0.54
+    } else if (priceEur <= 16700) {
+      eurPerCc = 3.5
+      percentRate = 0.48
+    } else if (priceEur <= 42300) {
+      eurPerCc = 5.5
+      percentRate = 0.48
+    } else if (priceEur <= 84500) {
+      eurPerCc = 7.5
+      percentRate = 0.48
+    } else if (priceEur <= 169000) {
+      eurPerCc = 15.0
+      percentRate = 0.48
+    } else {
+      eurPerCc = 20.0
+      percentRate = 0.48
+    }
+  } else if (!ageState.isOld) {
     if (engineCc <= 1000) {
       eurPerCc = 1.5
       percentRate = 0.154
@@ -195,6 +243,8 @@ export interface CalcResult {
   totalLocal: number
   currency: string
   powerHp: number
+  estimatedClearanceDate: string
+  carAgeYears: number
 }
 
 export function calcFullPrice(
@@ -208,10 +258,14 @@ export function calcFullPrice(
   model: string = '',
   badgeDetail: string = '',
   month: number = 6,
+  clearanceDays: number = DEFAULT_CLEARANCE_DAYS,
 ): CalcResult {
   const cc = engineCc > 0 ? engineCc : 1600
   const hp = powerHp > 0 ? powerHp : getPowerHp(brand, model, cc, badgeDetail)
   const carPriceRub = Math.round(priceKrw * krwRate)
+  const clearanceDate = getEstimatedClearanceDate(clearanceDays)
+  const estimatedClearanceDate = clearanceDate.toISOString()
+  const carAgeYears = getAgeState(year, month, clearanceDate).clearanceAge
 
   const RUB_TO_LOCAL: Record<string, number> = {
     RU: 1,
@@ -229,9 +283,9 @@ export function calcFullPrice(
   if (countryCode === 'RU') {
     const freightRub = Math.round(1200 * USD_RATE)
     const brokerRub = 90000
-    const dutyRub = getCustomsDutyRu(priceKrw, cc, krwRate, year, month)
+    const dutyRub = getCustomsDutyRu(priceKrw, cc, krwRate, year, month, clearanceDate)
     const feesRub = carPriceRub / USD_RATE <= 10000 ? 6187 : 10500
-    const utilRub = getUtilSbor(hp, cc, year, month)
+    const utilRub = getUtilSbor(hp, cc, year, month, clearanceDate)
     const totalRub = carPriceRub + freightRub + brokerRub + dutyRub + feesRub + utilRub
 
     return {
@@ -245,6 +299,8 @@ export function calcFullPrice(
       totalLocal: totalRub,
       currency: '₽',
       powerHp: hp,
+      estimatedClearanceDate,
+      carAgeYears,
     }
   }
 
@@ -270,5 +326,7 @@ export function calcFullPrice(
     totalLocal,
     currency: CURRENCY[countryCode] ?? '₽',
     powerHp: hp,
+    estimatedClearanceDate,
+    carAgeYears,
   }
 }

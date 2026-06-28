@@ -10,6 +10,8 @@
     "parse:cars:sync": "ENCAR_TARGET=500 ENCAR_MAX_PAGES=80 SYNC_AVAILABILITY=true node encar-parser.mjs",
     "specs:sync": "node vehicle-specs-sync.mjs",
     "calc:audit": "node calc-audit.mjs",
+    "cars:price-audit": "node cars-price-audit.mjs",
+    "korex:compare": "node korex-catalog-compare.mjs",
     "calc:audit:seed": "node calc-audit-seed.mjs",
     "calc:audit:korex": "node korex-audit-import.mjs",
     "start": "next start",
