@@ -8,16 +8,41 @@ const ninetyDaysAgo = new Date();
 ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 const dateFrom = ninetyDaysAgo.toISOString().slice(0, 10).replace(/-/g, "");
 
-const ENCAR_FILTER =
-  "(And.Hidden.N._.CarType.Y._.Year.range(201900..)._.Mileage.range(..100000)._.Price.range(700..3000).)";
 const ENCAR_PAGE_SIZE = 50;
 const DEFAULT_TARGET_COUNT = 50;
-const DEFAULT_MAX_PAGES = 7;
+const DEFAULT_MAX_PAGES = 20;
+const DEFAULT_YEAR_FROM = "202100";
+const DEFAULT_YEAR_TO = "202500";
 const TARGET_COUNT = parsePositiveInt(process.env.ENCAR_TARGET, DEFAULT_TARGET_COUNT);
 const ENCAR_MAX_PAGES = parsePositiveInt(process.env.ENCAR_MAX_PAGES, DEFAULT_MAX_PAGES);
+const YEAR_FROM = String(process.env.ENCAR_YEAR_FROM ?? DEFAULT_YEAR_FROM);
+const YEAR_TO = String(process.env.ENCAR_YEAR_TO ?? DEFAULT_YEAR_TO);
+const IMPORTED_TARGET_COUNT = parsePositiveInt(
+  process.env.ENCAR_IMPORTED_TARGET,
+  Math.round(TARGET_COUNT * 0.4),
+);
+const DOMESTIC_TARGET_COUNT = parsePositiveInt(
+  process.env.ENCAR_DOMESTIC_TARGET,
+  Math.max(0, TARGET_COUNT - IMPORTED_TARGET_COUNT),
+);
 const SYNC_AVAILABILITY = process.env.SYNC_AVAILABILITY !== "false";
+const DRY_RUN = process.env.ENCAR_DRY_RUN === "true";
+const ALLOW_POWER_FALLBACK = process.env.ALLOW_POWER_FALLBACK === "true";
 const DETAIL_DELAY_MS = parsePositiveInt(process.env.ENCAR_DETAIL_DELAY_MS, 300);
 const PAGE_DELAY_MS = parsePositiveInt(process.env.ENCAR_PAGE_DELAY_MS, 1000);
+
+const ENCAR_STREAMS = [
+  {
+    name: "imported_premium",
+    target: IMPORTED_TARGET_COUNT,
+    filter: `(And.Hidden.N._.CarType.N._.Year.range(${YEAR_FROM}..${YEAR_TO})._.Mileage.range(..100000)._.Price.range(1500..12000).)`,
+  },
+  {
+    name: "domestic_popular",
+    target: DOMESTIC_TARGET_COUNT,
+    filter: `(And.Hidden.N._.CarType.Y._.Year.range(${YEAR_FROM}..${YEAR_TO})._.Mileage.range(..100000)._.Price.range(700..9000).)`,
+  },
+].filter((stream) => stream.target > 0);
 
 const ENCAR_HEADERS = {
   "User-Agent":
@@ -47,6 +72,10 @@ const BRAND_MAP = {
   "렉서스": "Lexus",
   "닛산": "Nissan",
   "혼다": "Honda",
+  "마세라티": "Maserati",
+  "랜드로버": "Land Rover",
+  "포르쉐": "Porsche",
+  "미니": "MINI",
 };
 
 const KR_COLOR_MAP = {
@@ -139,6 +168,35 @@ const BODY_TYPE_MAP = {
   Staria: "minivan",
   "스타렉스": "minivan",
   Starex: "minivan",
+  "3 Series": "sedan",
+  "4 Series": "sedan",
+  "5 Series": "sedan",
+  "7 Series": "sedan",
+  "8 Series": "sedan",
+  "E-Class": "sedan",
+  "C-Class": "sedan",
+  "S-Class": "sedan",
+  A4: "sedan",
+  A5: "sedan",
+  A6: "sedan",
+  A7: "sedan",
+  A8: "sedan",
+  ES: "sedan",
+  LS: "sedan",
+  X3: "crossover",
+  X4: "crossover",
+  X5: "crossover",
+  X6: "crossover",
+  X7: "crossover",
+  GLC: "crossover",
+  GLE: "crossover",
+  GLS: "crossover",
+  Q5: "crossover",
+  Q7: "crossover",
+  Q8: "crossover",
+  NX: "crossover",
+  RX: "crossover",
+  UX: "crossover",
 };
 
 const MODEL_MAP = {
@@ -148,8 +206,10 @@ const MODEL_MAP = {
   "더 뉴 스포티지": "Sportage",
   "싼타페": "Santa Fe",
   "더 뉴 싼타페": "Santa Fe",
+  "쏘렌토": "Sorento",
   "소렌토": "Sorento",
   "더 뉴 소렌토": "Sorento",
+  "더 뉴 쏘렌토": "Sorento",
   "셀토스": "Seltos",
   "더 뉴 셀토스": "Seltos",
   "베뉴": "Venue",
@@ -182,32 +242,111 @@ const MODEL_MAP = {
   "더 뉴 카니발": "Carnival",
   "스타리아": "Staria",
   "스타렉스": "Starex",
+  "3시리즈": "3 Series",
+  "4시리즈": "4 Series",
+  "5시리즈": "5 Series",
+  "6시리즈": "6 Series",
+  "7시리즈": "7 Series",
+  "8시리즈": "8 Series",
+  "1시리즈": "1 Series",
+  "2시리즈": "2 Series",
+  X1: "X1",
+  X2: "X2",
+  X3: "X3",
+  X4: "X4",
+  X5: "X5",
+  X6: "X6",
+  X7: "X7",
+  "E-클래스": "E-Class",
+  "C-클래스": "C-Class",
+  "S-클래스": "S-Class",
+  "A-클래스": "A-Class",
+  "CLA-클래스": "CLA",
+  "CLS-클래스": "CLS",
+  "GLA-클래스": "GLA",
+  "GLB-클래스": "GLB",
+  "GLC-클래스": "GLC",
+  "GLE-클래스": "GLE",
+  "GLS-클래스": "GLS",
+  "G-클래스": "G-Class",
+  EQA: "EQA",
+  EQB: "EQB",
+  EQC: "EQC",
+  EQE: "EQE",
+  EQS: "EQS",
+  A4: "A4",
+  A5: "A5",
+  A6: "A6",
+  A7: "A7",
+  A8: "A8",
+  Q3: "Q3",
+  Q5: "Q5",
+  Q7: "Q7",
+  Q8: "Q8",
+  ES: "ES",
+  NX: "NX",
+  RX: "RX",
+  UX: "UX",
+  LS: "LS",
 };
 
-const SNG_MODELS = [
-  "투싼",
-  "스포티지",
-  "싼타페",
-  "소렌토",
-  "셀토스",
-  "베뉴",
-  "GV70",
-  "GV80",
-  "렉스턴",
-  "토레스",
-  "QM6",
-  "쏘나타",
-  "K5",
-  "K8",
-  "G80",
-  "G70",
-  "그랜저",
-  "아반떼",
-  "스팅어",
-  "카니발",
-  "스타리아",
-  "스타렉스",
-];
+const TARGET_MODEL_BY_BRAND = {
+  "Mercedes-Benz": [
+    "E-Class",
+    "C-Class",
+    "S-Class",
+    "A-Class",
+    "CLA",
+    "CLS",
+    "GLC",
+    "GLE",
+    "GLS",
+    "GLA",
+    "GLB",
+    "G-Class",
+    "EQA",
+    "EQB",
+    "EQC",
+    "EQE",
+    "EQS",
+    "E-클래스",
+    "C-클래스",
+    "S-클래스",
+    "A-클래스",
+    "CLA-클래스",
+    "CLS-클래스",
+    "GLC-클래스",
+    "GLE-클래스",
+    "GLS-클래스",
+    "GLA-클래스",
+    "GLB-클래스",
+    "G-클래스",
+  ],
+  BMW: [
+    "3 Series",
+    "4 Series",
+    "5 Series",
+    "6 Series",
+    "7 Series",
+    "8 Series",
+    "X3",
+    "X4",
+    "X5",
+    "X6",
+    "X7",
+    "3시리즈",
+    "4시리즈",
+    "5시리즈",
+    "6시리즈",
+    "7시리즈",
+    "8시리즈",
+  ],
+  Audi: ["A4", "A5", "A6", "A7", "A8", "Q3", "Q5", "Q7", "Q8"],
+  Lexus: ["ES", "NX", "RX", "UX", "LS"],
+  Kia: ["K5", "K8", "Sorento", "Sportage", "Carnival", "Seltos", "쏘렌토", "소렌토", "스포티지", "카니발", "셀토스"],
+  Hyundai: ["Tucson", "Santa Fe", "Palisade", "Grandeur", "Sonata", "Staria", "투싼", "싼타페", "팰리세이드", "그랜저", "쏘나타", "스타리아"],
+  Genesis: ["G70", "G80", "G90", "GV70", "GV80"],
+};
 
 const EXCLUDE_KEYWORDS = [
   "어린이보호차",
@@ -306,8 +445,8 @@ function resolvePowerFromVehicleSpecs({ brand, model, engineCc, badgeDetail, fue
   };
 }
 
-function buildEncarUrl(offset) {
-  const query = encodeURIComponent(ENCAR_FILTER);
+function buildEncarUrl(offset, stream) {
+  const query = encodeURIComponent(stream.filter);
   // В API Encar валидное имя сортировки для "самые новые" — CreatedDate.
   const sort = encodeURIComponent(`|CreatedDate|${offset}|${ENCAR_PAGE_SIZE}`);
   return `${ENCAR_BASE_URL}?count=true&q=${query}&sr=${sort}`;
@@ -347,13 +486,30 @@ function getBodyType(model) {
 function translateModel(koreanModel) {
   const modelName = String(koreanModel ?? "");
 
-  for (const [kor, eng] of Object.entries(MODEL_MAP)) {
+  for (const [kor, eng] of Object.entries(MODEL_MAP).sort((a, b) => {
+    const lengthDiff = b[0].length - a[0].length;
+    if (lengthDiff !== 0) return lengthDiff;
+    return modelKeyPriority(a[0]) - modelKeyPriority(b[0]);
+  })) {
     if (modelName.includes(kor)) {
       return eng;
     }
   }
 
   return modelName;
+}
+
+function modelKeyPriority(key) {
+  // Lexus NX/RX/UX/LS/ES must win over BMW X3/X5 style substrings:
+  // e.g. "NX300h" contains "X3", but the model is NX, not X3.
+  const lexusKeys = ["NX", "RX", "UX", "LS", "ES"];
+  const exactIndex = lexusKeys.indexOf(key);
+  if (exactIndex >= 0) return exactIndex;
+  return 100;
+}
+
+function getBrandName(car) {
+  return BRAND_MAP[car.Manufacturer] ?? car.Manufacturer ?? "Unknown";
 }
 
 function translateColorKr(color) {
@@ -390,6 +546,22 @@ const MODEL_ENGINE_DEFAULTS = {
   K8: { default: 2497, byFuel: { 가솔린: 2497, LPG: 2497 } },
   Palisade: { default: 2199, byFuel: { 디젤: 2199, 가솔린: 3778 } },
   Rexton: { default: 1998, byFuel: { 디젤: 1998 } },
+  "3 Series": { default: 1998, byFuel: { 디젤: 1995, 가솔린: 1998 } },
+  "4 Series": { default: 1998, byFuel: { 디젤: 1995, 가솔린: 1998 } },
+  "5 Series": { default: 1998, byFuel: { 디젤: 1995, 가솔린: 1998 } },
+  "6 Series": { default: 1995, byFuel: { 디젤: 1995, 가솔린: 1998 } },
+  "7 Series": { default: 2998, byFuel: { 디젤: 2993, 가솔린: 2998 } },
+  X3: { default: 1998, byFuel: { 디젤: 1995, 가솔린: 1998 } },
+  X4: { default: 1998, byFuel: { 디젤: 1995, 가솔린: 1998 } },
+  X5: { default: 2993, byFuel: { 디젤: 2993, 가솔린: 2998 } },
+  X6: { default: 2993, byFuel: { 디젤: 2993, 가솔린: 2998 } },
+  X7: { default: 2993, byFuel: { 디젤: 2993, 가솔린: 2998 } },
+  "S-Class": { default: 2925, byFuel: { 디젤: 2925, 가솔린: 2999 } },
+  GLE: { default: 2925, byFuel: { 디젤: 2925, 가솔린: 2999 } },
+  GLS: { default: 2925, byFuel: { 디젤: 2925, 가솔린: 2999 } },
+  GLC: { default: 1991, byFuel: { 디젤: 1950, 가솔린: 1991 } },
+  NX: { default: 2487, byFuel: { "가솔린+전기": 2487, 가솔린: 2487 } },
+  ES: { default: 2487, byFuel: { "가솔린+전기": 2487, 가솔린: 2487 } },
 };
 
 function getDefaultEngine(modelName, fuelType) {
@@ -503,6 +675,92 @@ const PARSER_BADGE_POWER_MAP = {
   "gasoline 9-seater noblesse special_3342": 280,
   "gasoline 7-seater limousine_3342": 280,
   "2.5 masters_2497": 304,
+  "3.3_3342": 290,
+  "diesel 2.2 2wd_2199": 202,
+  "40 tfsi premium_1984": 190,
+  "40 tfsi quattro sportback_1984": 204,
+  "45 tfsi premium_1984": 265,
+  "45 tfsi quattro premium_1984": 265,
+  "45 tfsi quattro premium sportback_1984": 265,
+  "40 tdi premium_1968": 204,
+  "40 tdi quattro s line black edition_1968": 204,
+  "35 tdi quattro premium_1968": 150,
+  "35 tdi premium sportback_1968": 150,
+  "55 tfsi quattro premium_2995": 340,
+  "320i luxury_1998": 184,
+  "520i luxury_1998": 184,
+  "520i m sport_1998": 190,
+  "xdrive20i m sport_1998": 184,
+  "xdrive20i xline_1998": 184,
+  "xdrive20i m sports x onlile exclusive edition_1998": 184,
+  "xdrive 20i m sports online exclusive edition_1998": 184,
+  "523d luxury_1995": 190,
+  "523d m sport_1995": 190,
+  "620d m sport_1995": 190,
+  "320d m sport_1995": 190,
+  "xdrive 45e m sport_2998": 286,
+  "xdrive30d m sport_2993": 286,
+  "xdrive 30d m sport 6 str_3000": 286,
+  "xdrive 30d design pure excellent 7-seater_2993": 286,
+  "xdrive40i m sport_2998": 340,
+  "xdrive 40i m sport 6str_2998": 340,
+  "xdrive 40d m sport online exclusive editon_2993": 340,
+  "740d xdrive m sport_2993": 320,
+  "xdrive 30e m sport_1998": 292,
+  "xdrive 20i luxury_1998": 184,
+  "xdrive 20i m sport_1998": 184,
+  "xdrive 20i m sports pro_1998": 184,
+  "420i m sport convertible_1998": 184,
+  "630i xdrive m sport_2998": 258,
+  "m850i xdrive gran coupe_4395": 530,
+  "m340i pro_2998": 387,
+  "m50i_4395": 530,
+  "m550i xdrive_4395": 530,
+  "740i xdrive m sport_2998": 381,
+  "745e iperformance m sport_2998": 394,
+  "xdrive 40i design pure excellence 7-seater_2998": 340,
+  "xdrive 40i m sport 7str_2998": 340,
+  "a220 sedan_1991": 190,
+  "a220 hatchback_1991": 190,
+  "amg a45 4maitc+ hatchback_1991": 421,
+  "cla250 4matic_1991": 224,
+  "amg cla 45 s 4matic+_1991": 421,
+  "c200 coupe_1991": 204,
+  "c200 cabriolet_1991": 204,
+  "c300 amg line_1999": 258,
+  "glc300 4matic_1991": 258,
+  "glc 300 4matic avantgarde_1999": 258,
+  "amg glc43 4matic coupe_2996": 390,
+  "amg glc63 s 4matic+ coupe_3982": 510,
+  "amg glb35 4matic_1991": 306,
+  "glb250 4matic_1991": 224,
+  "gle450 4matic_2999": 367,
+  "amg gle53 4matic+ coupe_2999": 435,
+  "gle400d 4matic coupe_2925": 330,
+  "gls400d 4matic_2925": 330,
+  "s350 d_2925": 286,
+  "s350 d 4matic_2989": 286,
+  "s400 d 4matic_2925": 330,
+  "e200 avantgarde_1999": 204,
+  "e220d avantgarde_1950": 194,
+  "e250 amg line_1991": 211,
+  "e300 avantgarde_1991": 258,
+  "e300 4matic exclusive_1991": 258,
+  "e300 4matic amg line_1999": 258,
+  "e350 4matic amg line_1991": 299,
+  "e53 amg 4matic+ coupe_2999": 435,
+  "cls300d amg line_1950": 245,
+  "cls300d 4matic_1993": 265,
+  "cls450 4matic amg line_2999": 367,
+  "s450l 4matic_2999": 367,
+  "s500l 4matic_2999": 435,
+  "maybach s580 4matic_3982": 503,
+  "3.8 awd_3778": 315,
+  "gasoline 3.8 4wd_3778": 295,
+  "5.0 awd_5038": 425,
+  "hev 1.6 tourer 11-seater_1598": 180,
+  "hev 1.6 2wd_1598": 180,
+  "diesel 2.2 4wd_2199": 202,
 };
 
 const PARSER_MODEL_POWER_MAP = {
@@ -528,6 +786,7 @@ const PARSER_MODEL_POWER_MAP = {
   "hyundai_elantra_1999": 158,
   "hyundai_venue_1598": 123,
   "hyundai_venue_1591": 123,
+  "hyundai_palisade_3778": 295,
   "kia_carnival_2199": 202,
   "kia_carnival_2151": 202,
   "kia_carnival_3470": 294,
@@ -548,6 +807,8 @@ const PARSER_MODEL_POWER_MAP = {
   "kia_k8_3470": 300,
   "kia_k8_1598": 180,
   "kia_k8_1591": 180,
+  "kia_sorento_1598": 180,
+  "kia_sorento_2199": 202,
   "kia_seltos_1598": 177,
   "kia_seltos_1591": 177,
   "kia_seltos_1999": 150,
@@ -560,6 +821,7 @@ const PARSER_MODEL_POWER_MAP = {
   "genesis_g80_2999": 278,
   "genesis_g80_3470": 380,
   "genesis_g80_3497": 380,
+  "genesis_g90_5038": 425,
   "genesis_gv70_1998": 252,
   "genesis_gv70_2151": 202,
   "genesis_gv70_2497": 304,
@@ -573,6 +835,28 @@ const PARSER_MODEL_POWER_MAP = {
   "renaultkorea_qm6_1998": 144,
   "renaultkorea_qm6_1997": 144,
   "renaultkorea_qm6_1461": 160,
+  "lexus_es_2487": 218,
+  "lexus_nx_2487": 242,
+  "lexus_rx_2487": 249,
+  "audi_a4_1984": 190,
+  "audi_a5_1984": 204,
+  "audi_a6_1984": 265,
+  "audi_a6_1968": 204,
+  "audi_q5_1968": 204,
+  "audi_q7_2995": 340,
+  "bmw_3series_1998": 184,
+  "bmw_5series_1998": 184,
+  "bmw_x4_1998": 184,
+  "bmw_x5_2998": 286,
+  "bmw_x6_2993": 286,
+  "bmw_x6_2998": 340,
+  "mercedesbenz_cclass_1999": 258,
+  "mercedesbenz_eclass_1991": 258,
+  "mercedesbenz_eclass_1999": 258,
+  "mercedesbenz_eclass_1950": 194,
+  "mercedesbenz_eclass_2999": 435,
+  "mercedesbenz_glc_1991": 258,
+  "mercedesbenz_sclass_1950": 245,
 };
 
 function estimatePowerByEngine(engineCc) {
@@ -671,16 +955,21 @@ function buildDataQuality(mappedCar) {
   };
 }
 
-function isSngReady(car) {
+function isMarketReady(car) {
+  const brand = getBrandName(car);
   const modelName = String(car.Model ?? "");
+  const translatedModel = translateModel(car.Model);
   const badge = String(car.Badge ?? "");
   const badgeDetail = String(car.BadgeDetail ?? "");
-  const modelOk = SNG_MODELS.some((model) => modelName.includes(model));
+  const isPureElectric = String(car.FuelType ?? "") === "전기";
+  const targetModels = TARGET_MODEL_BY_BRAND[brand] ?? [];
+  const text = `${modelName} ${translatedModel} ${badge} ${badgeDetail}`.toLowerCase();
+  const modelOk = targetModels.some((model) => text.includes(String(model).toLowerCase()));
   const badgeOk = !EXCLUDE_KEYWORDS.some(
     (keyword) => badge.includes(keyword) || badgeDetail.includes(keyword),
   );
   const hasPhotos = Array.isArray(car.Photos) && car.Photos.length > 0;
-  return modelOk && badgeOk && hasPhotos;
+  return modelOk && badgeOk && hasPhotos && !isPureElectric;
 }
 
 function isFreshListing(car) {
@@ -703,6 +992,45 @@ function getModelCounts(cars) {
     models[car.model] = (models[car.model] ?? 0) + 1;
     return models;
   }, {});
+}
+
+function getPowerSourceCounts(cars) {
+  return cars.reduce((sources, car) => {
+    sources[car.power_source ?? "unknown"] = (sources[car.power_source ?? "unknown"] ?? 0) + 1;
+    return sources;
+  }, {});
+}
+
+function getFallbackPowerCombos(cars) {
+  const combos = new Map();
+
+  for (const car of cars) {
+    if (car.power_source !== "engine_fallback") continue;
+
+    const key = [
+      car.brand ?? "",
+      car.model ?? "",
+      car.engine_cc ?? 0,
+      car.fuel_type ?? "",
+      car.badge_detail ?? "",
+    ].join("|");
+
+    const current = combos.get(key) ?? {
+      count: 0,
+      brand: car.brand,
+      model: car.model,
+      engine_cc: car.engine_cc,
+      fuel_type: car.fuel_type,
+      badge_detail: car.badge_detail,
+      power_hp: car.power_hp,
+      sample_url: car.raw_url,
+    };
+
+    current.count += 1;
+    combos.set(key, current);
+  }
+
+  return [...combos.values()].sort((a, b) => b.count - a.count);
 }
 
 function sleep(ms) {
@@ -776,13 +1104,14 @@ async function mapCar(car) {
   await sleep(DETAIL_DELAY_MS);
   const options = await fetchOptions(car.Id);
   await sleep(DETAIL_DELAY_MS);
-  const brand = BRAND_MAP[car.Manufacturer] ?? car.Manufacturer;
+  const brand = getBrandName(car);
   const model = translateModel(car.Model);
   const badgeDetail = detail.grade_english ?? car.BadgeDetail ?? null;
   const engineCc =
     normalizeEngineCc(detail.displacement) ||
     (car.Displacement && car.Displacement > 0 ? car.Displacement : 0) ||
-    parseEngineFromBadge(car.Badge, model, car.FuelType);
+    parseEngineFromBadge(car.Badge, model, car.FuelType) ||
+    parseEngineFromBadge(badgeDetail, model, car.FuelType);
   const driveType = parseDriveType(car.Badge) ?? parseDriveType(car.BadgeDetail) ?? null;
   const power =
     resolvePowerFromVehicleSpecs({
@@ -804,7 +1133,7 @@ async function mapCar(car) {
     brand,
     model,
     year: Number(String(car.Year).slice(0, 4)),
-    body_type: getBodyType(car.Model),
+    body_type: getBodyType(model),
     mileage: car.Mileage,
     engine_cc: engineCc,
     fuel_type: car.FuelType ?? "gasoline",
@@ -877,8 +1206,8 @@ async function mapCar(car) {
   };
 }
 
-async function fetchEncarPage(offset) {
-  const response = await fetch(buildEncarUrl(offset), {
+async function fetchEncarPage(offset, stream) {
+  const response = await fetch(buildEncarUrl(offset, stream), {
     headers: ENCAR_HEADERS,
   });
 
@@ -895,46 +1224,45 @@ async function fetchEncarPage(offset) {
   return results;
 }
 
-async function fetchAllSngCars(target = TARGET_COUNT) {
+async function fetchStreamCars(stream, globalSeenIds) {
   const result = [];
-  const seenIds = new Set();
   let receivedCount = 0;
   let offset = 0;
 
   while (
-    result.length < target &&
+    result.length < stream.target &&
     offset < ENCAR_MAX_PAGES * ENCAR_PAGE_SIZE
   ) {
-    console.log(`Запрос offset=${offset}...`);
+    console.log(`Запрос ${stream.name} offset=${offset}...`);
 
-    const cars = await fetchEncarPage(offset);
+    const cars = await fetchEncarPage(offset, stream);
     receivedCount += cars.length;
 
     if (!cars.length) {
       break;
     }
 
-    const filtered = cars.filter((car) => isSngReady(car) && isFreshListing(car));
+    const filtered = cars.filter((car) => isMarketReady(car) && isFreshListing(car));
     const newFiltered = filtered.filter((car) => {
       const id = String(car.Id);
 
-      if (seenIds.has(id)) {
+      if (globalSeenIds.has(id)) {
         return false;
       }
 
-      seenIds.add(id);
+      globalSeenIds.add(id);
       return true;
     });
 
     result.push(...newFiltered);
     console.log(
-      `  Получено: ${cars.length}, подходит(СНГ+90д): ${filtered.length}, новых: ${newFiltered.length}, итого: ${result.length}`,
+      `  Получено: ${cars.length}, подходит(рынок+90д): ${filtered.length}, новых: ${newFiltered.length}, итого ${stream.name}: ${result.length}/${stream.target}`,
     );
 
     offset += ENCAR_PAGE_SIZE;
 
     if (
-      result.length < target &&
+      result.length < stream.target &&
       offset < ENCAR_MAX_PAGES * ENCAR_PAGE_SIZE
     ) {
       await sleep(PAGE_DELAY_MS);
@@ -942,13 +1270,41 @@ async function fetchAllSngCars(target = TARGET_COUNT) {
   }
 
   return {
-    cars: result.slice(0, target),
+    cars: result.slice(0, stream.target),
     receivedCount,
-    filteredCount: Math.min(result.length, target),
+    filteredCount: Math.min(result.length, stream.target),
+  };
+}
+
+async function fetchAllMarketCars() {
+  const cars = [];
+  const seenIds = new Set();
+  let receivedCount = 0;
+  let filteredCount = 0;
+
+  for (const stream of ENCAR_STREAMS) {
+    const result = await fetchStreamCars(stream, seenIds);
+    cars.push(...result.cars);
+    receivedCount += result.receivedCount;
+    filteredCount += result.filteredCount;
+    if (stream !== ENCAR_STREAMS.at(-1)) {
+      await sleep(PAGE_DELAY_MS);
+    }
+  }
+
+  return {
+    cars: cars.slice(0, TARGET_COUNT),
+    receivedCount,
+    filteredCount: Math.min(filteredCount, TARGET_COUNT),
   };
 }
 
 async function saveCarsToSupabase(cars) {
+  if (DRY_RUN) {
+    console.log("ENCAR_DRY_RUN=true — пропускаем запись в Supabase");
+    return { savedCount: 0, errorCount: 0 };
+  }
+
   if (cars.length === 0) {
     return { savedCount: 0, errorCount: 0 };
   }
@@ -986,26 +1342,44 @@ async function main() {
   let savedCount = 0;
   let errorCount = 0;
   let mappedCars = [];
+  let skippedPowerFallback = [];
 
   try {
     console.log("Настройки парсера:", {
       target: TARGET_COUNT,
+      importedTarget: IMPORTED_TARGET_COUNT,
+      domesticTarget: DOMESTIC_TARGET_COUNT,
+      yearFrom: YEAR_FROM,
+      yearTo: YEAR_TO,
       maxPages: ENCAR_MAX_PAGES,
       pageSize: ENCAR_PAGE_SIZE,
       syncAvailability: SYNC_AVAILABILITY,
+      dryRun: DRY_RUN,
+      allowPowerFallback: ALLOW_POWER_FALLBACK,
       detailDelayMs: DETAIL_DELAY_MS,
       pageDelayMs: PAGE_DELAY_MS,
+      streams: ENCAR_STREAMS.map((stream) => ({
+        name: stream.name,
+        target: stream.target,
+      })),
     });
 
     await loadVerifiedVehicleSpecs();
     console.log(`Загружено проверенных спецификаций: ${verifiedVehicleSpecs.length}`);
 
-    const sngCars = await fetchAllSngCars(TARGET_COUNT);
-    receivedCount = sngCars.receivedCount;
-    filteredCount = sngCars.filteredCount;
+    const marketCars = await fetchAllMarketCars();
+    receivedCount = marketCars.receivedCount;
+    filteredCount = marketCars.filteredCount;
 
-    for (const car of sngCars.cars) {
-      mappedCars.push(await mapCar(car));
+    for (const car of marketCars.cars) {
+      const mappedCar = await mapCar(car);
+
+      if (!ALLOW_POWER_FALLBACK && mappedCar.power_source === "engine_fallback") {
+        skippedPowerFallback.push(mappedCar);
+        continue;
+      }
+
+      mappedCars.push(mappedCar);
     }
 
     const result = await saveCarsToSupabase(mappedCars);
@@ -1021,15 +1395,21 @@ async function main() {
 
   const brandStats = getTopBrands(mappedCars);
   const modelStats = getModelCounts(mappedCars);
+  const powerSourceStats = getPowerSourceCounts(mappedCars);
+  const fallbackCombos = getFallbackPowerCombos(skippedPowerFallback.length > 0 ? skippedPowerFallback : mappedCars);
   const sampleCars = mappedCars.slice(0, 3);
 
   console.log(`\n✅ Готово:`);
   console.log(`   Получено с Encar: ${receivedCount} авто`);
-  console.log(`   Прошло СНГ фильтр: ${filteredCount} авто`);
+  console.log(`   Прошло market фильтр: ${filteredCount} авто`);
+  console.log(`   Пропущено из-за неизвестной мощности: ${skippedPowerFallback.length} авто`);
   console.log(`   Сохранено в Supabase: ${savedCount} авто`);
   console.log(`   Ошибок: ${errorCount}`);
   console.log(`\nТоп брендов:`, brandStats);
   console.log(`Модели:`, modelStats);
+  console.log(`Источники мощности:`, powerSourceStats);
+  console.log(`Топ fallback-комбинаций мощности:`);
+  console.log(JSON.stringify(fallbackCombos.slice(0, 20), null, 2));
   console.log(`\nПример данных:`);
   console.log(
     JSON.stringify(
@@ -1058,6 +1438,23 @@ async function main() {
 
   console.log(`\nПример первых 3 Carnival:`);
   console.log(JSON.stringify(carnivalSample, null, 2));
+
+  const fallbackPowerSample = mappedCars
+    .filter((c) => c.power_source === "engine_fallback")
+    .slice(0, 12)
+    .map((c) => ({
+      brand: c.brand,
+      model: c.model,
+      year: c.year,
+      engine_cc: c.engine_cc,
+      fuel_type: c.fuel_type,
+      badge_detail: c.badge_detail,
+      power_hp: c.power_hp,
+      raw_url: c.raw_url,
+    }));
+
+  console.log(`\nПримеры авто с оценочной мощностью:`);
+  console.log(JSON.stringify(fallbackPowerSample, null, 2));
 }
 
 main();

@@ -43,15 +43,26 @@ export type CatalogCar = {
   is_sng_ready: boolean | null;
 };
 
-const BRANDS_WITH_LOGOS = [
-  { name: "Hyundai", logoSrc: "/brand-logos/hyundai.svg" },
+const POPULAR_BRANDS_WITH_LOGOS = [
+  { name: "Mercedes-Benz", logoSrc: "/brand-logos/mercedes.svg" },
+  { name: "BMW", logoSrc: "/brand-logos/bmw.svg" },
+  { name: "Audi", logoSrc: "/brand-logos/audi.svg" },
+  { name: "Lexus", logoSrc: "/brand-logos/lexus.svg" },
   { name: "Kia", logoSrc: "/brand-logos/kia.svg" },
-  // Genesis car logo SVG is not in repo yet; keep a neutral placeholder.
-  { name: "Genesis", logoSrc: null },
+  { name: "Hyundai", logoSrc: "/brand-logos/hyundai.svg" },
+] as const;
+
+const OTHER_BRANDS_WITH_LOGOS = [
+  { name: "Genesis", logoSrc: "/brand-logos/genesis.svg" },
   { name: "KGM", logoSrc: "/brand-logos/kgm.svg" },
   { name: "Renault Korea", logoSrc: "/brand-logos/renault.svg" },
   { name: "SsangYong", logoSrc: "/brand-logos/ssangyong.svg" },
+  { name: "Toyota", logoSrc: "/brand-logos/toyota.svg" },
 ] as const;
+
+type BrandLogoItem =
+  | (typeof POPULAR_BRANDS_WITH_LOGOS)[number]
+  | (typeof OTHER_BRANDS_WITH_LOGOS)[number];
 
 function formatNumber(value: number | null | undefined) {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -270,6 +281,46 @@ export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProp
     e.stopPropagation();
     toggleStoredFavorite(encarId);
     setFavorites(getFavorites());
+  }
+
+  function renderBrandButton(brand: BrandLogoItem) {
+    const logoScale =
+      brand.name === "Audi"
+        ? "scale-125"
+        : brand.name === "Lexus" || brand.name === "Kia"
+          ? "scale-110"
+          : "";
+
+    return (
+      <button
+        key={brand.name}
+        type="button"
+        onClick={() =>
+          setFilters((current) => ({
+            ...current,
+            brand: current.brand === brand.name ? "" : brand.name,
+            model: "",
+          }))
+        }
+        title={brand.name}
+        aria-label={brand.name}
+        className={`flex h-20 items-center justify-center rounded-xl border px-2 py-3 text-xs font-medium transition-all ${
+          filters.brand === brand.name
+            ? "border-gray-900 bg-gray-900 text-white"
+            : "border-gray-200 bg-white text-gray-700"
+        }`}
+      >
+        <div className="flex h-10 w-full items-center justify-center overflow-hidden">
+          <img
+            src={brand.logoSrc}
+            alt={brand.name}
+            className={`max-h-full w-full object-contain ${
+              filters.brand === brand.name ? "brightness-0 invert" : ""
+            } ${logoScale}`}
+          />
+        </div>
+      </button>
+    );
   }
 
   return (
@@ -576,42 +627,16 @@ export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProp
 
             <div className="flex flex-col gap-5 px-4 py-4">
               <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">Марка</p>
+                <p className="mb-2 text-sm font-semibold text-gray-900">Популярные марки</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {BRANDS_WITH_LOGOS.map((brand) => (
-                    <button
-                      key={brand.name}
-                      type="button"
-                      onClick={() =>
-                        setFilters((current) => ({
-                          ...current,
-                          brand: current.brand === brand.name ? "" : brand.name,
-                          model: "",
-                        }))
-                      }
-                      title={brand.name}
-                      aria-label={brand.name}
-                      className={`flex items-center justify-center rounded-xl border p-3 text-xs font-medium transition-all ${
-                        filters.brand === brand.name
-                          ? "border-gray-900 bg-gray-900 text-white"
-                          : "border-gray-200 bg-white text-gray-700"
-                      }`}
-                    >
-                      <div className="flex h-10 w-full items-center justify-center overflow-hidden px-2">
-                        {brand.logoSrc ? (
-                          <img
-                            src={brand.logoSrc}
-                            alt={brand.name}
-                            className="h-5 w-full object-contain"
-                          />
-                        ) : (
-                          <span className="text-[11px] font-black tracking-[0.12em]">
-                            {brand.name.toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
+                  {POPULAR_BRANDS_WITH_LOGOS.map(renderBrandButton)}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-gray-900">Другие марки</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {OTHER_BRANDS_WITH_LOGOS.map(renderBrandButton)}
                 </div>
               </div>
 

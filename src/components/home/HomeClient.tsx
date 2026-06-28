@@ -38,13 +38,12 @@ const BANNERS = [
 ];
 
 const BRANDS = [
-  { name: "Hyundai", logoSrc: "/brand-logos/hyundai.svg" },
+  { name: "Mercedes-Benz", logoSrc: "/brand-logos/mercedes.svg" },
+  { name: "BMW", logoSrc: "/brand-logos/bmw.svg" },
+  { name: "Audi", logoSrc: "/brand-logos/audi.svg" },
+  { name: "Lexus", logoSrc: "/brand-logos/lexus.svg" },
   { name: "Kia", logoSrc: "/brand-logos/kia.svg" },
-  // Genesis car logo SVG is not in repo yet; keep a neutral placeholder.
-  { name: "Genesis", logoSrc: null },
-  { name: "KGM", logoSrc: "/brand-logos/kgm.svg" },
-  { name: "Renault Korea", logoSrc: "/brand-logos/renault.svg" },
-  { name: "Toyota", logoSrc: "/brand-logos/toyota.svg" },
+  { name: "Hyundai", logoSrc: "/brand-logos/hyundai.svg" },
 ] as const;
 
 const FEATURES = [
@@ -112,13 +111,20 @@ function SectionHeader({
   );
 }
 
-function BrandLogo({ brand }: { brand: (typeof BRANDS)[number] }) {
+function BrandLogo({ brand }: { brand: { name: string; logoSrc: string | null } }) {
   if (brand.logoSrc) {
+    const logoScale =
+      brand.name === "Audi"
+        ? "scale-125"
+        : brand.name === "Lexus" || brand.name === "Kia"
+          ? "scale-110"
+          : "";
+
     return (
       <img
         src={brand.logoSrc}
         alt={brand.name}
-        className="h-5 w-full object-contain"
+        className={`h-7 max-h-full w-full object-contain ${logoScale}`}
       />
     );
   }
