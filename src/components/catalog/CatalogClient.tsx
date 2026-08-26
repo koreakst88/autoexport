@@ -2,825 +2,115 @@
 
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ChevronDown, Star } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { ArrowLeft, Check, ChevronDown, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { calcFullPrice, COUNTRIES, getRegistrationMonth } from "@/lib/calc";
-import {
-  getFavorites,
-  toggleFavorite as toggleStoredFavorite,
-} from "@/lib/favorites";
+import type { CalculationRates } from "@/lib/calculator/types";
+import { getFavorites, toggleFavorite } from "@/lib/favorites";
 import { BottomNav } from "@/components/shared/BottomNav";
-import {
-  translateBadge,
-  translateFuel,
-  translateTransmission,
-} from "@/lib/translations";
-import { useTelegram } from "@/hooks/useTelegram";
+import { translateBadge, translateFuel, translateTransmission } from "@/lib/translations";
 
-export type CatalogCar = {
-  encar_id: string;
-  brand: string | null;
-  model: string | null;
-  year: number | null;
-  body_type: string | null;
-  mileage: number | null;
-  engine_cc: number | null;
-  power_hp?: number | null;
-  fuel_type: string | null;
-  transmission: string | null;
-  price_krw: number | null;
-  photos: string[] | null;
-  modified_at_encar: string | null;
-  registered_at_encar: string | null;
-  first_registration_korea: string | null;
-  badge: string | null;
-  badge_detail: string | null;
-  drive_type: string | null;
-  color: string | null;
-  vin: string | null;
-  options?: { name: string; price: number | null }[] | null;
-  created_at?: string | null;
-  is_sng_ready: boolean | null;
-};
+export type CatalogCar = { encar_id: string; brand: string | null; model: string | null; year: number | null; body_type: string | null; mileage: number | null; engine_cc: number | null; power_hp?: number | null; fuel_type: string | null; transmission: string | null; price_krw: number | null; photos: string[] | null; registered_at_encar: string | null; first_registration_korea: string | null; badge: string | null; badge_detail: string | null; drive_type: string | null; color: string | null; created_at?: string | null; is_sng_ready: boolean | null };
+export type CatalogFilters = { q: string; brand: string; model: string; yearFrom: string; yearTo: string; priceFrom: string; priceTo: string; body: string; fuel: string[]; transmission: string; drive: string; sort: string };
+type Facets = { brands: string[]; models: string[]; bodyTypes: string[]; transmissions: string[]; fuels: string[]; drives: string[]; years: string[] };
+type Props = { cars: CatalogCar[]; initialFilters: CatalogFilters; krwRate: number; calculationRates: CalculationRates };
 
-const POPULAR_BRANDS_WITH_LOGOS = [
-  { name: "Mercedes-Benz", logoSrc: "/brand-logos/mercedes.svg" },
-  { name: "BMW", logoSrc: "/brand-logos/bmw.svg" },
-  { name: "Audi", logoSrc: "/brand-logos/audi.svg" },
-  { name: "Lexus", logoSrc: "/brand-logos/lexus.svg" },
-  { name: "Kia", logoSrc: "/brand-logos/kia.svg" },
-  { name: "Hyundai", logoSrc: "/brand-logos/hyundai.svg" },
-] as const;
+const EMPTY: CatalogFilters = { q: "", brand: "", model: "", yearFrom: "", yearTo: "", priceFrom: "", priceTo: "", body: "", fuel: [], transmission: "", drive: "", sort: "newest" };
+const compact = (value: string) => value.toLocaleLowerCase("ru-RU").replace(/[^a-zа-яё0-9]/gi, "");
+const carTitle = (car: CatalogCar) => [car.brand, car.model, car.year].filter(Boolean).join(" ");
 
-const OTHER_BRANDS_WITH_LOGOS = [
-  { name: "Genesis", logoSrc: "/brand-logos/genesis.svg" },
-  { name: "KGM", logoSrc: "/brand-logos/kgm.svg" },
-  { name: "Renault Korea", logoSrc: "/brand-logos/renault.svg" },
-  { name: "SsangYong", logoSrc: "/brand-logos/ssangyong.svg" },
-  { name: "Toyota", logoSrc: "/brand-logos/toyota.svg" },
-] as const;
-
-type BrandLogoItem =
-  | (typeof POPULAR_BRANDS_WITH_LOGOS)[number]
-  | (typeof OTHER_BRANDS_WITH_LOGOS)[number];
-
-function formatNumber(value: number | null | undefined) {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "—";
+function filterParams(filters: CatalogFilters) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (Array.isArray(value)) value.forEach((item) => params.append(key, item));
+    else if (value && !(key === "sort" && value === "newest")) params.set(key, value);
   }
-
-  return value.toLocaleString("ru-RU");
+  return params;
 }
 
-function formatKoreaReg(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  if (dateStr.length === 8) {
-    return `${dateStr.slice(4, 6)}.${dateStr.slice(0, 4)}`;
-  }
-  return dateStr;
+function price(car: CatalogCar, country: string, krwRate: number, rates: CalculationRates) {
+  return calcFullPrice(car.price_krw ?? 0, car.engine_cc ?? 0, country, car.year ?? 2021, car.power_hp ?? 0, krwRate, car.brand ?? "", car.model ?? "", car.badge_detail ?? "", getRegistrationMonth(car.first_registration_korea), 90, rates);
 }
 
-function formatCarPriceRub(priceKrw: number | null): number {
-  if (typeof priceKrw !== "number") return 0;
-  return Math.round(priceKrw * 0.0535);
-}
-
-function formatAddedDate(dateStr: string | null): string {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return "";
-  const months = [
-    "янв",
-    "фев",
-    "мар",
-    "апр",
-    "мая",
-    "июн",
-    "июл",
-    "авг",
-    "сен",
-    "окт",
-    "ноя",
-    "дек",
-  ];
-  return `${date.getDate()} ${months[date.getMonth()]}`;
-}
-
-function displayColor(color: string | null): string {
-  if (!color) return "—";
-  if (/[가-힣]/.test(color)) return "—";
-  return color;
-}
-
-function getFirstPhoto(photos: string[] | null) {
-  return Array.isArray(photos) ? photos[0] : undefined;
-}
-
-type CatalogClientProps = {
-  cars: CatalogCar[];
-  initialBrand?: string;
-  krwRate: number;
-};
-
-export function CatalogClient({ cars, initialBrand, krwRate }: CatalogClientProps) {
+export function CatalogClient({ cars, initialFilters, krwRate, calculationRates }: Props) {
   const router = useRouter();
-  const { isInTelegram, showBackButton, hideBackButton } = useTelegram();
-  type CountryCode = (typeof COUNTRIES)[number]["code"];
-  const [countryCode, setCountryCode] = useState<CountryCode>(COUNTRIES[0].code);
-  const [isCountryOpen, setIsCountryOpen] = useState(false);
+  const pathname = usePathname();
+  const [filters, setFilters] = useState(initialFilters);
+  const [sheet, setSheet] = useState<"filters" | "brand" | "price" | "sort" | null>(null);
+  const [facets, setFacets] = useState<Facets>({ brands: [], models: [], bodyTypes: [], transmissions: [], fuels: [], drives: [], years: [] });
+  const [facetCount, setFacetCount] = useState(cars.length);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({
-    brand: initialBrand ?? "",
-    model: "",
-    yearFrom: "",
-    yearTo: "",
-    priceFrom: "",
-    priceTo: "",
-    fuelType: [] as string[],
-    transmission: "",
-    driveType: "",
-  });
-  const [searchQuery, setSearchQuery] = useState("");
+  const [country, setCountry] = useState(COUNTRIES[0].code);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const selectedCountry = COUNTRIES.find((item) => item.code === country) ?? COUNTRIES[0];
+  const update = (patch: Partial<CatalogFilters>) => setFilters((current) => ({ ...current, ...patch }));
+  const selectBrand = (brand: string) => update({ brand, model: brand === filters.brand ? filters.model : "" });
 
-  const selectedCountry =
-    COUNTRIES.find((country) => country.code === countryCode) ?? COUNTRIES[0];
-
+  useEffect(() => setFavorites(getFavorites()), []);
   useEffect(() => {
-    if (!isInTelegram) return;
-    showBackButton(() => {
-      if (window.history.length > 1) router.back();
-      else router.push("/");
-    });
-    return () => hideBackButton();
-  }, [hideBackButton, isInTelegram, router, showBackButton]);
+    const timer = window.setTimeout(async () => {
+      const params = filterParams(filters);
+      router.replace(params.size ? pathname + "?" + params.toString() : pathname, { scroll: false });
+      const facetParams = new URLSearchParams(params);
+      facetParams.set("country", country);
+      const response = await fetch("/api/catalog/facets?" + facetParams.toString());
+      if (!response.ok) return;
+      const data = await response.json();
+      setFacetCount(data.count);
+      setFacets(data.facets);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [country, filters, pathname, router]);
 
-  useEffect(() => {
-    setFavorites(getFavorites());
-  }, []);
+  const visibleCars = useMemo(() => cars.filter((car) => {
+    if (filters.q && !compact((car.brand ?? "") + (car.model ?? "")).includes(compact(filters.q))) return false;
+    if (filters.brand && car.brand !== filters.brand) return false;
+    if (filters.model && car.model !== filters.model) return false;
+    if (filters.yearFrom && (car.year ?? 0) < Number(filters.yearFrom)) return false;
+    if (filters.yearTo && (car.year ?? 9999) > Number(filters.yearTo)) return false;
+    if (filters.body && car.body_type !== filters.body) return false;
+    if (filters.transmission && translateTransmission(car.transmission) !== filters.transmission) return false;
+    if (filters.drive && car.drive_type !== filters.drive) return false;
+    if (filters.fuel.length && !filters.fuel.includes(translateFuel(car.fuel_type))) return false;
+    const total = price(car, country, krwRate, calculationRates).totalLocal;
+    if (filters.priceFrom && total < Number(filters.priceFrom)) return false;
+    if (filters.priceTo && total > Number(filters.priceTo)) return false;
+    return true;
+  }).sort((a, b) => filters.sort === "priceAsc" ? (a.price_krw ?? 0) - (b.price_krw ?? 0) : filters.sort === "priceDesc" ? (b.price_krw ?? 0) - (a.price_krw ?? 0) : filters.sort === "yearDesc" ? (b.year ?? 0) - (a.year ?? 0) : 0), [cars, filters, country, krwRate, calculationRates]);
+  const suggestions = useMemo(() => filters.q ? Array.from(new Set(cars.filter((car) => compact((car.brand ?? "") + (car.model ?? "")).includes(compact(filters.q))).map(carTitle))).slice(0, 6) : [], [cars, filters.q]);
+  const activeCount = Object.entries(filters).filter(([key, value]) => key !== "q" && key !== "sort" && (Array.isArray(value) ? value.length : Boolean(value))).length;
 
-  useEffect(() => {
-    console.log(
-      "Фото:",
-      cars.slice(0, 3).map((car) => ({
-        model: car.model,
-        photo: car.photos?.[0],
-      })),
-    );
-  }, [cars]);
+  return <main className="min-h-screen bg-white pb-20 text-gray-950 lg:pb-8">
+    <header className="border-b bg-white"><div className="mx-auto max-w-7xl px-4 py-3">
+      <div className="flex items-center justify-between"><button type="button" onClick={() => history.length > 1 ? router.back() : router.push("/")} className="lg:hidden" aria-label="Назад"><ArrowLeft /></button><Link href="/" className="hidden text-lg font-semibold lg:block">TL Auto</Link><div className="relative"><button type="button" onClick={() => setCountryOpen(!countryOpen)} className="flex items-center gap-1 text-sm">{selectedCountry.flag} {selectedCountry.name}<ChevronDown className="h-4 w-4" /></button>{countryOpen && <div className="absolute right-0 z-30 mt-2 w-44 border bg-white shadow-lg">{COUNTRIES.map((item) => <button key={item.code} type="button" onClick={() => { setCountry(item.code); setCountryOpen(false); }} className="flex w-full justify-between px-3 py-2 text-sm hover:bg-gray-50">{item.flag} {item.name}{item.code === country && <Check className="h-4 w-4" />}</button>)}</div>}</div></div>
+      <div className="relative mt-3"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" /><input value={filters.q} onChange={(event) => update({ q: event.target.value })} placeholder="Марка или модель" className="w-full border border-gray-300 py-2.5 pl-10 pr-10 outline-none focus:border-gray-950" />{filters.q && <button type="button" onClick={() => update({ q: "" })} className="absolute right-3 top-3" aria-label="Очистить"><X className="h-5 w-5" /></button>}{suggestions.length > 0 && <div className="absolute z-40 mt-1 w-full border bg-white shadow-lg">{suggestions.map((item) => <button key={item} type="button" onClick={() => update({ q: item })} className="block w-full px-4 py-3 text-left text-sm hover:bg-gray-50">{item}</button>)}</div>}</div>
+    </div></header>
+    <div className="mx-auto max-w-7xl px-4"><div className="py-4 lg:hidden"><h1 className="text-2xl font-semibold">Автомобили из Кореи</h1><p className="mt-1 text-sm text-gray-500">{visibleCars.length} объявлений</p></div><div className="flex gap-2 overflow-x-auto py-3"><Quick label={filters.brand ? "Марка: " + filters.brand : "Марка"} active={Boolean(filters.brand)} onClick={() => setSheet("brand")} /><Quick label="Цена" active={Boolean(filters.priceFrom || filters.priceTo)} onClick={() => setSheet("price")} /><Quick label="Год" active={Boolean(filters.yearFrom || filters.yearTo)} onClick={() => setSheet("filters")} /><Quick label="Кузов" active={Boolean(filters.body)} onClick={() => setSheet("filters")} /><Quick label="КПП" active={Boolean(filters.transmission)} onClick={() => setSheet("filters")} /></div>
+      <div className="flex justify-between border-y py-3 text-sm lg:hidden"><button type="button" onClick={() => setSheet("filters")} className="flex items-center gap-2 font-medium"><SlidersHorizontal className="h-4 w-4" />Фильтры{activeCount ? " · " + activeCount : ""}</button><button type="button" onClick={() => setSheet("sort")} className="font-medium">Сортировка</button></div>
+      <div className="grid gap-8 lg:grid-cols-[238px_minmax(0,1fr)] lg:py-7"><aside className="sticky top-4 hidden h-fit border-r pr-5 lg:block"><div className="mb-5 flex justify-between"><b>Фильтры</b><button type="button" onClick={() => setFilters(EMPTY)} className="text-sm text-gray-500">Сбросить</button></div><FilterFields filters={filters} facets={facets} update={update} selectBrand={selectBrand} /></aside>
+        <section><div className="flex justify-between gap-4"><div className="hidden lg:block"><h1 className="text-2xl font-semibold">Автомобили из Кореи</h1><p className="mt-1 text-sm text-gray-500">{visibleCars.length} объявлений</p></div><button type="button" onClick={() => setSheet("sort")} className="hidden h-fit border px-3 py-2 text-sm lg:block">Сортировка</button></div><div className="mt-5 hidden flex-wrap gap-x-4 gap-y-2 border-b pb-5 text-sm lg:flex">{facets.brands.slice(0, 16).map((brand) => <button key={brand} type="button" onClick={() => selectBrand(brand)} className={filters.brand === brand ? "font-semibold underline" : "hover:underline"}>{brand}</button>)}</div><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visibleCars.map((car) => <CarCard key={car.encar_id} car={car} favorite={favorites.includes(car.encar_id)} country={country} krwRate={krwRate} calculationRates={calculationRates} onFavorite={(event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); toggleFavorite(car.encar_id); setFavorites(getFavorites()); }} />)}</div>{!visibleCars.length && <p className="border py-12 text-center text-gray-500">По этим параметрам автомобили не найдены.</p>}</section>
+      </div></div><BottomNav active="catalog" />
+    {sheet && <Sheet title={sheet === "brand" ? "Марка" : sheet === "price" ? "Цена" : sheet === "sort" ? "Сортировка" : "Фильтры"} onClose={() => setSheet(null)} onReset={() => setFilters(EMPTY)} footer={sheet !== "sort" ? <button type="button" onClick={() => setSheet(null)} className="w-full bg-gray-950 py-3.5 text-sm font-semibold text-white">Показать {facetCount} объявлений</button> : undefined}>{sheet === "brand" ? <BrandList brands={facets.brands} selected={filters.brand} select={(brand) => { selectBrand(brand); setSheet(null); }} /> : sheet === "price" ? <PriceFields filters={filters} update={update} currency={selectedCountry.currency} /> : sheet === "sort" ? <SortList selected={filters.sort} select={(sort) => { update({ sort }); setSheet(null); }} /> : <FilterFields filters={filters} facets={facets} update={update} selectBrand={selectBrand} />}</Sheet>}
+  </main>;
+}
 
-  useEffect(() => {
-    console.log("Расчёт:", {
-      priceKrw: 20000000,
-      countryCode: selectedCountry.code,
-      result: calcFullPrice(20000000, 1600, selectedCountry.code, 2021, 0, krwRate),
-    });
-  }, [selectedCountry.code]);
-
-  const availableModels = useMemo(() => {
-    if (!filters.brand) return [];
-    const models = cars
-      .filter((car) => car.brand === filters.brand)
-      .map((car) => car.model)
-      .filter(Boolean) as string[];
-  return Array.from(new Set(models)).sort();
-}, [cars, filters.brand]);
-
-  const filteredCars = useMemo(() => {
-    return cars.filter((car) => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (!`${car.brand ?? ""} ${car.model ?? ""}`.toLowerCase().includes(q)) {
-          return false;
-        }
-      }
-
-      if (filters.brand && car.brand !== filters.brand) return false;
-      if (filters.model && car.model !== filters.model) return false;
-
-      if (filters.yearFrom) {
-        const y = parseInt(filters.yearFrom, 10);
-        if (Number.isFinite(y) && (car.year ?? 0) < y) return false;
-      }
-      if (filters.yearTo) {
-        const y = parseInt(filters.yearTo, 10);
-        if (Number.isFinite(y) && (car.year ?? 9999) > y) return false;
-      }
-
-      if (filters.fuelType.length > 0) {
-        const carFuel = translateFuel(car.fuel_type);
-        if (!filters.fuelType.includes(carFuel)) return false;
-      }
-
-      if (filters.transmission) {
-        if (translateTransmission(car.transmission) !== filters.transmission) {
-          return false;
-        }
-      }
-
-      if (filters.driveType && car.drive_type !== filters.driveType) return false;
-
-      const hasPriceFilter = Boolean(filters.priceFrom || filters.priceTo);
-      if (hasPriceFilter) {
-        const priceKrw = typeof car.price_krw === "number" ? car.price_krw : 0;
-        const calc = calcFullPrice(
-          priceKrw,
-          car.engine_cc ?? 0,
-          selectedCountry.code,
-          car.year ?? 2021,
-          car.power_hp ?? 0,
-          krwRate,
-          car.brand ?? "",
-          car.model ?? "",
-          car.badge_detail ?? "",
-          getRegistrationMonth(car.first_registration_korea),
-        );
-        const price = calc.totalLocal;
-        if (filters.priceFrom) {
-          const min = parseInt(filters.priceFrom, 10);
-          if (Number.isFinite(min) && price < min) return false;
-        }
-        if (filters.priceTo) {
-          const max = parseInt(filters.priceTo, 10);
-          if (Number.isFinite(max) && price > max) return false;
-        }
-      }
-
-      return true;
-    });
-  }, [cars, filters, searchQuery, selectedCountry.code]);
-
-  const hasActiveFilters =
-    Boolean(
-      filters.brand ||
-        filters.model ||
-        filters.yearFrom ||
-        filters.yearTo ||
-        filters.priceFrom ||
-        filters.priceTo ||
-        filters.transmission ||
-        filters.driveType,
-    ) || filters.fuelType.length > 0;
-
-  const activeFiltersCount = useMemo(() => {
-    return [
-      filters.brand,
-      filters.model,
-      filters.yearFrom,
-      filters.yearTo,
-      filters.priceFrom,
-      filters.priceTo,
-      ...filters.fuelType,
-      filters.transmission,
-      filters.driveType,
-    ].filter(Boolean).length;
-  }, [filters]);
-
-  function handleFavorite(e: MouseEvent, encarId: string) {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleStoredFavorite(encarId);
-    setFavorites(getFavorites());
-  }
-
-  function renderBrandButton(brand: BrandLogoItem) {
-    const logoScale =
-      brand.name === "Audi"
-        ? "scale-125"
-        : brand.name === "Lexus" || brand.name === "Kia"
-          ? "scale-110"
-          : "";
-
-    return (
-      <button
-        key={brand.name}
-        type="button"
-        onClick={() =>
-          setFilters((current) => ({
-            ...current,
-            brand: current.brand === brand.name ? "" : brand.name,
-            model: "",
-          }))
-        }
-        title={brand.name}
-        aria-label={brand.name}
-        className={`flex h-20 items-center justify-center rounded-xl border px-2 py-3 text-xs font-medium transition-all ${
-          filters.brand === brand.name
-            ? "border-gray-900 bg-gray-900 text-white"
-            : "border-gray-200 bg-white text-gray-700"
-        }`}
-      >
-        <div className="flex h-10 w-full items-center justify-center overflow-hidden">
-          <img
-            src={brand.logoSrc}
-            alt={brand.name}
-            className={`max-h-full w-full object-contain ${
-              filters.brand === brand.name ? "brightness-0 invert" : ""
-            } ${logoScale}`}
-          />
-        </div>
-      </button>
-    );
-  }
-
-  return (
-    <main className="min-h-screen bg-gray-50 pb-24 text-gray-950">
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          {!isInTelegram ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.history.length > 1) router.back();
-                else router.push("/");
-              }}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700"
-              aria-label="Назад"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          ) : (
-            <div className="w-10" />
-          )}
-
-          <div className="flex-1 text-center text-xl font-semibold tracking-tight">
-            AutoExport
-          </div>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsCountryOpen((value) => !value)}
-              className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-            >
-              <span>{selectedCountry.flag}</span>
-              <span>{selectedCountry.name}</span>
-              <ChevronDown className="h-4 w-4 text-gray-500" />
-            </button>
-
-            {isCountryOpen ? (
-              <div className="absolute right-0 mt-2 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
-                {COUNTRIES.map((country) => (
-                  <button
-                    key={country.code}
-                    type="button"
-            onClick={() => {
-              setCountryCode(country.code);
-              setIsCountryOpen(false);
-              const preview = calcFullPrice(25_000_000, 1600, country.code, 2021, 0, krwRate);
-              console.log(
-                `Страна: ${country.name}, пример цены: ${preview.totalLocal.toLocaleString("ru-RU")} ${country.currency}`,
-              );
-            }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>{country.flag}</span>
-                      <span>{country.name}</span>
-                    </span>
-                    {country.code === selectedCountry.code ? (
-                      <Check className="h-4 w-4" />
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
-          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2.5">
-            <span className="text-sm text-gray-400">🔍</span>
-            <input
-              type="text"
-              placeholder="Марка, модель..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              className="flex-1 bg-transparent text-sm text-gray-900 outline-none"
-            />
-            {searchQuery ? (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="text-xs text-gray-400"
-              >
-                ✕
-              </button>
-            ) : null}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setFilterOpen(true)}
-            className={`flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-              hasActiveFilters ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"
-            }`}
-          >
-            ⚙️ Фильтр
-            {hasActiveFilters ? (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white text-xs font-bold text-gray-900">
-                {activeFiltersCount}
-              </span>
-            ) : null}
-          </button>
-        </div>
-      </header>
-
-      <section className="mx-auto grid max-w-6xl gap-4 px-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredCars.map((car) => {
-          const photo = getFirstPhoto(car.photos);
-          const priceKrw = typeof car.price_krw === "number" ? car.price_krw : 0;
-          const carPriceRub = formatCarPriceRub(car.price_krw);
-          const result =
-            typeof car.price_krw === "number"
-              ? calcFullPrice(
-                  car.price_krw,
-                  car.engine_cc ?? 0,
-                  selectedCountry.code,
-                  car.year ?? 2021,
-                  car.power_hp ?? 0,
-                  krwRate,
-                  car.brand ?? "",
-                  car.model ?? "",
-                  car.badge_detail ?? "",
-                  getRegistrationMonth(car.first_registration_korea),
-                )
-              : null;
-          const specs = [
-            car.engine_cc && car.engine_cc > 0 ? `${(car.engine_cc / 1000).toFixed(1)}л` : null,
-            translateFuel(car.fuel_type),
-            car.drive_type ?? translateTransmission(car.transmission) ?? null,
-          ]
-            .filter(Boolean)
-            .join(" · ");
-          const badgeText = translateBadge(car.badge);
-          const addedDate = formatAddedDate(
-            car.registered_at_encar ?? car.created_at ?? null,
-          );
-
-          return (
-            <Link
-              key={car.encar_id}
-              href={`/car/${car.encar_id}`}
-              className="block overflow-hidden rounded-xl bg-white shadow-sm transition-shadow hover:shadow-md"
-            >
-              <article>
-                <div className="relative h-48 bg-gray-100">
-                  {photo ? (
-                    <img
-                      src={car.photos?.[0] ?? ""}
-                      alt={`${car.brand ?? ""} ${car.model ?? ""}`}
-                      className="h-full w-full object-cover"
-                      onError={(event) => {
-                        event.currentTarget.style.display = "none";
-                        event.currentTarget.nextElementSibling?.classList.remove(
-                          "hidden",
-                        );
-                      }}
-                    />
-                  ) : (
-                    null
-                  )}
-                  <div
-                    className={`absolute inset-0 flex flex-col items-center justify-center bg-gray-100 ${
-                      photo ? "hidden" : ""
-                    }`}
-                  >
-                    <span className="text-4xl">🚗</span>
-                    <span className="mt-1 text-xs text-gray-400">
-                      Фото недоступно
-                    </span>
-                  </div>
-
-                  <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                    <span className="rounded bg-green-500 px-2 py-1 text-xs font-bold text-white">
-                      В ПРОДАЖЕ
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(event) => handleFavorite(event, car.encar_id)}
-                    className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm"
-                    aria-label="Избранное"
-                  >
-                    <Star
-                      className={`h-5 w-5 ${
-                        favorites.includes(car.encar_id)
-                          ? "fill-yellow-400 text-yellow-500"
-                          : "text-gray-400"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="border-t border-gray-100 p-4">
-                  <h2 className="text-lg font-semibold leading-tight text-gray-900">
-                    {car.brand} {car.model} {car.year}
-                  </h2>
-                  <p className="mt-1 text-sm text-gray-700">
-                    {badgeText || "Комплектация не указана"}
-                  </p>
-                </div>
-
-                <div className="border-t border-gray-100 px-4 py-3 text-sm text-gray-700">
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-2">
-                      <span>📅</span>
-                      <span>Рег. в Корее: {formatKoreaReg(car.first_registration_korea)}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>🔧</span>
-                      <span>{specs || "—"}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>📍</span>
-                      <span>{formatNumber(car.mileage)} км</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>🎨</span>
-                      <span>{displayColor(car.color)}</span>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                      Добавлено: {addedDate}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-100 px-4 py-3">
-                  <p className="text-sm text-gray-500">Стоимость в Корее:</p>
-                  <p className="mt-1 text-sm font-semibold text-gray-900">
-                    {priceKrw.toLocaleString("ru-RU")} ₩ (
-                    {carPriceRub.toLocaleString("ru-RU")} ₽)
-                  </p>
-                </div>
-
-                <div className="border-t border-gray-100 p-4">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                    Цена под ключ
-                  </p>
-                  <button
-                    type="button"
-                    className="mt-2 flex w-full items-center justify-between rounded-lg bg-gray-50 px-3 py-3 text-left"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      router.push(`/car/${car.encar_id}`);
-                    }}
-                  >
-                    <span className="text-xl font-bold text-gray-900">
-                      {result
-                        ? `${result.totalLocal.toLocaleString("ru-RU")} ${result.currency}`
-                        : "Цена по запросу"}
-                    </span>
-                  </button>
-                </div>
-              </article>
-            </Link>
-          );
-        })}
-
-        {filteredCars.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-500 sm:col-span-2 lg:col-span-3">
-            Авто по выбранным фильтрам не найдены.
-          </div>
-        ) : null}
-      </section>
-
-      <BottomNav active="catalog" />
-
-      {filterOpen ? (
-        <div className="fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setFilterOpen(false)}
-          />
-
-          <div className="absolute bottom-0 left-0 right-0 max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white">
-            <div className="flex justify-center pb-2 pt-3">
-              <div className="h-1 w-10 rounded-full bg-gray-300" />
-            </div>
-
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 pb-4">
-              <h3 className="text-base font-bold text-gray-900">Фильтры</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setFilters({
-                    brand: "",
-                    model: "",
-                    yearFrom: "",
-                    yearTo: "",
-                    priceFrom: "",
-                    priceTo: "",
-                    fuelType: [],
-                    transmission: "",
-                    driveType: "",
-                  });
-                  setSearchQuery("");
-                }}
-                className="text-sm font-medium text-blue-500"
-              >
-                Сбросить
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-5 px-4 py-4">
-              <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">Популярные марки</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {POPULAR_BRANDS_WITH_LOGOS.map(renderBrandButton)}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">Другие марки</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {OTHER_BRANDS_WITH_LOGOS.map(renderBrandButton)}
-                </div>
-              </div>
-
-              {filters.brand && availableModels.length > 0 ? (
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-gray-900">Модель</p>
-                  <div className="flex flex-wrap gap-2">
-                    {availableModels.map((model) => (
-                      <button
-                        key={model}
-                        type="button"
-                        onClick={() =>
-                          setFilters((current) => ({
-                            ...current,
-                            model: current.model === model ? "" : model,
-                          }))
-                        }
-                        className={`rounded-full border px-3 py-1.5 text-sm transition-all ${
-                          filters.model === model
-                            ? "border-gray-900 bg-gray-900 text-white"
-                            : "border-gray-200 bg-white text-gray-700"
-                        }`}
-                      >
-                        {model}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">Год выпуска</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="number"
-                    placeholder="От (2019)"
-                    value={filters.yearFrom}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        yearFrom: event.target.value,
-                      }))
-                    }
-                    className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-900"
-                  />
-                  <input
-                    type="number"
-                    placeholder="До (2024)"
-                    value={filters.yearTo}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        yearTo: event.target.value,
-                      }))
-                    }
-                    className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">
-                  Цена под ключ ({selectedCountry.currency})
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="number"
-                    placeholder="От"
-                    value={filters.priceFrom}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        priceFrom: event.target.value,
-                      }))
-                    }
-                    className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-900"
-                  />
-                  <input
-                    type="number"
-                    placeholder="До"
-                    value={filters.priceTo}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        priceTo: event.target.value,
-                      }))
-                    }
-                    className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">Тип топлива</p>
-                <div className="flex flex-wrap gap-2">
-                  {["Бензин", "Дизель", "Гибрид", "LPG", "Электро"].map((fuel) => (
-                    <button
-                      key={fuel}
-                      type="button"
-                      onClick={() =>
-                        setFilters((current) => ({
-                          ...current,
-                          fuelType: current.fuelType.includes(fuel)
-                            ? current.fuelType.filter((x) => x !== fuel)
-                            : [...current.fuelType, fuel],
-                        }))
-                      }
-                      className={`rounded-full border px-3 py-1.5 text-sm transition-all ${
-                        filters.fuelType.includes(fuel)
-                          ? "border-gray-900 bg-gray-900 text-white"
-                          : "border-gray-200 bg-white text-gray-700"
-                      }`}
-                    >
-                      {fuel}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">
-                  Коробка передач
-                </p>
-                <div className="flex gap-2">
-                  {["Автомат", "Механика"].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() =>
-                        setFilters((current) => ({
-                          ...current,
-                          transmission: current.transmission === t ? "" : t,
-                        }))
-                      }
-                      className={`flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all ${
-                        filters.transmission === t
-                          ? "border-gray-900 bg-gray-900 text-white"
-                          : "border-gray-200 bg-white text-gray-700"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold text-gray-900">Привод</p>
-                <div className="flex gap-2">
-                  {["2WD", "4WD"].map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() =>
-                        setFilters((current) => ({
-                          ...current,
-                          driveType: current.driveType === d ? "" : d,
-                        }))
-                      }
-                      className={`flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all ${
-                        filters.driveType === d
-                          ? "border-gray-900 bg-gray-900 text-white"
-                          : "border-gray-200 bg-white text-gray-700"
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 border-t border-gray-100 bg-white p-4">
-              <button
-                type="button"
-                onClick={() => setFilterOpen(false)}
-                className="w-full rounded-xl bg-gray-900 py-3.5 text-sm font-semibold text-white"
-              >
-                Показать {filteredCars.length} авто
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </main>
-  );
+function Quick({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={"whitespace-nowrap border px-3 py-2 text-sm " + (active ? "border-gray-950 bg-gray-950 text-white" : "border-gray-300")}>{label}</button>; }
+function Sheet({ title, onClose, onReset, children, footer }: { title: string; onClose: () => void; onReset: () => void; children: React.ReactNode; footer?: React.ReactNode }) { return <div className="fixed inset-0 z-50 bg-black/40"><div className="absolute bottom-0 left-0 right-0 mx-auto flex max-h-[92vh] max-w-xl flex-col bg-white shadow-2xl sm:bottom-6 sm:rounded-2xl"><div className="mx-auto mt-2 h-1 w-10 rounded bg-gray-200" /><div className="flex items-center justify-between border-b px-5 py-4"><button type="button" onClick={onClose}><X /></button><b>{title}</b><button type="button" onClick={onReset} className="text-sm text-gray-500">Сбросить</button></div><div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>{footer && <div className="border-t bg-white p-4">{footer}</div>}</div></div>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <section><h3 className="mb-2 text-sm font-semibold">{label}</h3>{children}</section>; }
+function PriceFields({ filters, update, currency }: { filters: CatalogFilters; update: (patch: Partial<CatalogFilters>) => void; currency: string }) { return <Field label={"Цена под ключ (" + currency + ")"}><div className="grid grid-cols-2 gap-3"><input value={filters.priceFrom} onChange={(event) => update({ priceFrom: event.target.value })} placeholder="От" inputMode="numeric" className="border px-3 py-3" /><input value={filters.priceTo} onChange={(event) => update({ priceTo: event.target.value })} placeholder="До" inputMode="numeric" className="border px-3 py-3" /></div></Field>; }
+function BrandList({ brands, selected, select }: { brands: string[]; selected: string; select: (brand: string) => void }) {
+  const [query, setQuery] = useState("");
+  return <><div className="relative mb-5"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти марку" className="w-full border py-2.5 pl-10" /></div><div className="divide-y">{brands.filter((brand) => compact(brand).includes(compact(query))).map((brand) => <button key={brand} type="button" onClick={() => select(brand === selected ? "" : brand)} className="flex w-full justify-between py-3 text-left">{brand}{brand === selected && <Check className="h-5 w-5" />}</button>)}</div></>;
+}
+function SortList({ selected, select }: { selected: string; select: (sort: string) => void }) {
+  const values = [["newest", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"], ["yearDesc", "Новее год выпуска"]];
+  return <div className="divide-y">{values.map(([value, label]) => <button key={value} type="button" onClick={() => select(value)} className="flex w-full justify-between py-4 text-left">{label}{selected === value && <Check className="h-5 w-5" />}</button>)}</div>;
+}
+function FilterFields({ filters, facets, update, selectBrand }: { filters: CatalogFilters; facets: Facets; update: (patch: Partial<CatalogFilters>) => void; selectBrand: (brand: string) => void }) {
+  const button = (value: string, selected: string, onClick: () => void) => <button key={value} type="button" onClick={onClick} className={"border px-3 py-2 text-sm " + (value === selected ? "border-gray-950 bg-gray-950 text-white" : "")}>{value}</button>;
+  return <div className="space-y-6"><Field label="Марка"><select value={filters.brand} onChange={(event) => selectBrand(event.target.value)} className="w-full border bg-white px-3 py-2.5"><option value="">Все марки</option>{facets.brands.map((item) => <option key={item}>{item}</option>)}</select></Field>{filters.brand && <Field label="Модель"><select value={filters.model} onChange={(event) => update({ model: event.target.value })} className="w-full border bg-white px-3 py-2.5"><option value="">Все модели</option>{facets.models.map((item) => <option key={item}>{item}</option>)}</select></Field>}<PriceFields filters={filters} update={update} currency="₽" /><Field label="Год выпуска"><div className="grid grid-cols-2 gap-3"><input value={filters.yearFrom} onChange={(event) => update({ yearFrom: event.target.value })} placeholder="От" className="border px-3 py-2.5" /><input value={filters.yearTo} onChange={(event) => update({ yearTo: event.target.value })} placeholder="До" className="border px-3 py-2.5" /></div></Field><Field label="Кузов"><div className="flex flex-wrap gap-2">{facets.bodyTypes.map((item) => button(item, filters.body, () => update({ body: filters.body === item ? "" : item })))}</div></Field><Field label="Коробка передач"><div className="flex flex-wrap gap-2">{facets.transmissions.map((item) => button(item, filters.transmission, () => update({ transmission: filters.transmission === item ? "" : item })))}</div></Field><Field label="Тип топлива"><div className="flex flex-wrap gap-2">{facets.fuels.map((item) => <button key={item} type="button" onClick={() => update({ fuel: filters.fuel.includes(item) ? filters.fuel.filter((value) => value !== item) : [...filters.fuel, item] })} className={"border px-3 py-2 text-sm " + (filters.fuel.includes(item) ? "border-gray-950 bg-gray-950 text-white" : "")}>{item}</button>)}</div></Field></div>;
+}
+function CarCard({ car, favorite, onFavorite, country, krwRate, calculationRates }: { car: CatalogCar; favorite: boolean; onFavorite: (event: MouseEvent) => void; country: string; krwRate: number; calculationRates: CalculationRates }) {
+  const result = price(car, country, krwRate, calculationRates);
+  return <Link href={"/car/" + car.encar_id} className="overflow-hidden border border-gray-200 bg-white hover:border-gray-500"><article><div className="relative aspect-[4/3] bg-gray-100">{car.photos?.[0] ? <img src={car.photos[0]} alt={carTitle(car)} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-gray-400">Фото недоступно</div>}<button type="button" onClick={onFavorite} className="absolute right-3 top-3 bg-white p-2" aria-label="Избранное"><Star className={"h-5 w-5 " + (favorite ? "fill-yellow-400 text-yellow-500" : "text-gray-600")} /></button></div><div className="p-4"><h2 className="font-semibold">{carTitle(car)}</h2><p className="mt-1 text-sm text-gray-600">{translateBadge(car.badge)}</p><p className="mt-3 text-sm">{car.engine_cc ? (car.engine_cc / 1000).toFixed(1) + " л" : "—"} · {translateFuel(car.fuel_type)} · {translateTransmission(car.transmission)}</p><p className="mt-1 text-sm text-gray-600">{(car.mileage ?? 0).toLocaleString("ru-RU")} км</p><p className="mt-4 text-sm text-gray-500">Цена под ключ</p><p className="text-lg font-semibold">{result.totalLocal.toLocaleString("ru-RU")} {result.currency}</p></div></article></Link>;
 }
