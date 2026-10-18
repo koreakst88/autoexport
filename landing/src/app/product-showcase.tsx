@@ -16,18 +16,24 @@ export default function ProductShowcase() {
       <div className="stage-copy" key={`copy-${active}`}><span className="stage-counter">0{active+1}<span> / 05</span></span><span className={`product-status ${product.status==='В разработке'?'status-progress':''}`}>{product.status}</span><h3>{product.name}</h3><p>{product.description}</p><div className="stage-details">{active===0?'Каталог · Фильтры · Расчёты':active===1?'Каталог внутри Telegram':active===2?'Encar · Свежие объявления':active===3?'Расчёт · История автомобилей':'Китай · Autohome'}</div><span className="button">{active===0?'Исследовать демо':product.href?'Открыть в Telegram':'Обсудить направление'} <span>↗</span></span><small>Цены и наличие на скриншотах могут устареть.{active===0?' Пример расчёта — до Владивостока.':''}</small></div>
     </div></a><div className="scene-progress" aria-hidden="true"><span style={{width:`${(active+1)*20}%`}}/></div></div>
     <div className="mobile-projects">
-      <div className="mobile-projects-hint" aria-hidden="true"><span>ЛИСТАЙТЕ ПРОЕКТЫ</span><span>Листайте влево <b>→</b></span></div>
+      <div className="mobile-projects-hint" aria-hidden="true"><span>ЛИСТАЙТЕ ПРОЕКТЫ</span><span>Листайте влево <b>←</b></span></div>
       <div className="mobile-projects-track" ref={mobileTrack} onScroll={e=>{const track=e.currentTarget;const card=track.querySelector<HTMLElement>('.mobile-project-card');if(card){const gap=parseFloat(getComputedStyle(track).columnGap)||12;setActive(Math.min(products.length-1,Math.round(track.scrollLeft/(card.offsetWidth+gap))));}}}>
         {products.map((item,i)=>{
           const href=item.href??'#contact';
-          return <a className={`mobile-project-card mobile-project-${item.preview}`} href={href} target={item.href?'_blank':undefined} rel={item.href?'noopener noreferrer':undefined} data-metrica-goal={item.href?(i===0?'web_demo_open':'product_telegram_open'):undefined} aria-label={`${i===0?'Исследовать демо':item.href?'Открыть в Telegram':'Обсудить направление'}: ${item.name}`} key={item.name}>
-            <div className="mobile-project-art">{i<4?<img src={images[i]} alt={`Реальный экран продукта ${item.name}`} loading="lazy"/>:<div className="mobile-project-china"><span>中国</span><small>CHINA / AUTOHOME</small></div>}<span className="mobile-project-number">0{i+1} / 05</span></div>
-            <div className="mobile-project-copy"><span className={`product-status ${item.status==='В разработке'?'status-progress':''}`}>{item.status}</span><h3>{item.name}</h3><p>{item.description}</p><span className="mobile-project-link">{i===0?'Исследовать демо':item.href?'Открыть в Telegram':'Обсудить направление'} <b>↗</b></span></div>
+          return <a className={`mobile-project-card mobile-project-kind-${item.preview}`} href={href} target={item.href?'_blank':undefined} rel={item.href?'noopener noreferrer':undefined} data-metrica-goal={item.href?(i===0?'web_demo_open':'product_telegram_open'):undefined} aria-label={`${i===0?'Исследовать демо':item.href?'Открыть в Telegram':'Обсудить направление'}: ${item.name}`} key={item.name}>
+            <div className="mobile-project-art">
+              <span className="mobile-project-number">0{i+1} / 05</span>
+              {i<4?<div className={i===0?'mobile-project-browser':'mobile-project-phone'}>
+                {i===0&&<div className="mobile-project-browser-bar"><i/><i/><i/><span>AutoExport</span></div>}
+                <img src={images[i]} alt={`Реальный экран продукта ${item.name}`} loading="lazy" draggable={false}/>
+              </div>:<div className="mobile-project-china-art"><span>中国</span><small>CHINA / AUTOHOME</small><p>Следующее направление</p></div>}
+            </div>
+            <div className="mobile-project-copy"><span className={`product-status ${item.status==='В разработке'?'status-progress':''}`}>{item.status}</span><h3>{item.name}</h3><p>{item.description}</p><span className="mobile-project-link">{i===0?'Исследовать демо':item.href?'Открыть в Telegram':'Обсудить направление'} <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span></div>
           </a>;
         })}
       </div>
       <div className="mobile-projects-pagination" aria-label={`Проект ${active+1} из ${products.length}`}><div><span style={{width:`${(active+1)*20}%`}}/></div><span>0{active+1} <i>/ 05</i></span></div>
     </div>
-    <div className="china-anchor" id="china"><span>СЛЕДУЮЩИЙ ГОРИЗОНТ</span><button onClick={()=>{setActive(4);mobileTrack.current?.scrollTo({left:mobileTrack.current.scrollWidth,behavior:'smooth'});document.getElementById('case')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}}>Китай / Autohome <span>В разработке ↗</span></button></div>
+    <div className="china-anchor" id="china"><span>СЛЕДУЮЩИЙ ГОРИЗОНТ</span><button onClick={()=>{setActive(4);mobileTrack.current?.scrollTo({left:mobileTrack.current.scrollWidth,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});document.getElementById('case')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}}>Китай / Autohome <span>В разработке ↗</span></button></div>
   </section>;
 }
