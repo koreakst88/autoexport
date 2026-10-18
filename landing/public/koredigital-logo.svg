@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="96" viewBox="0 0 520 96" fill="none">
+  <defs>
+    <linearGradient id="brand" x1="9" y1="4" x2="77" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1768F2"/><stop offset=".48" stop-color="#684DE3"/><stop offset="1" stop-color="#EB365F"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="23" y1="28" x2="65" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#53A5FF"/><stop offset=".56" stop-color="#A54BDC"/><stop offset="1" stop-color="#F04D79"/>
+    </linearGradient>
+  </defs>
+  <rect x="5" y="5" width="70" height="86" rx="20" stroke="url(#brand)" stroke-width="7"/>
+  <path d="M29 25v46M60 28 35 48l27 25" stroke="url(#glyph)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 45h12M20 53h11M23 61h9" stroke="#E94685" stroke-width="3.5" stroke-linecap="round"/>
+  <text x="101" y="65" fill="#F8F9FC" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="600" letter-spacing="-2.5">Koredigital</text>
+</svg>

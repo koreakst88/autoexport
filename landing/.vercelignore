@@ -1,0 +1,6 @@
+.playwright-cli
+output
+docs
+README.md
+AGENTS.md
+*.tsbuildinfo
