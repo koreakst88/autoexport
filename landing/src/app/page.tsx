@@ -16,22 +16,22 @@ export default function Home() {
 
     <section className="hero" id="top">
       <div className="hero-copy">
-        <p className="eyebrow"><span className="eyebrow-dot"/> DIGITAL-ПРОДУКТЫ ДЛЯ АВТОБИЗНЕСА</p>
-        <h1><span>Автобизнес.</span><span>В цифровом</span><span><em>измерении.</em></span></h1>
-        <p className="hero-lead">Проектируем и разрабатываем сайты, каталоги и инструменты расчёта для автодилеров и импортёров.</p>
-        <div className="hero-actions"><a className="button" href="#contact">Обсудить задачу <span>↗</span></a><a className="text-link" href="#case">Посмотреть демо <span>↓</span></a></div>
-        <div className="hero-note"><span className="note-mark">↗</span><span>От поиска автомобиля<br/>до обращения клиента</span></div>
+        <p className="eyebrow"><span className="eyebrow-dot"/> ДЛЯ АВТОДИЛЕРОВ И КОМПАНИЙ ПО АВТОИМПОРТУ</p>
+        <h1><span>Цифровая платформа</span><span>для вашего</span><span><em>автобизнеса.</em></span></h1>
+        <p className="hero-lead">Разрабатываем сайты, каталоги автомобилей и Telegram-приложения с расчётом стоимости доставки до РФ — под ваш бренд и процессы.</p>
+        <div className="hero-actions"><a className="button" href="#contact">Обсудить разработку <span>↗</span></a><a className="text-link" href="#case">Посмотреть продукты <span>↓</span></a></div>
+        <ol className="hero-journey" aria-label="Путь клиента"><li><span>01</span>Выбрать авто</li><li><span>02</span>Рассчитать стоимость</li><li><span>03</span>Обратиться в Telegram</li></ol><div className="hero-note"><span className="note-mark">↗</span><span>От поиска автомобиля<br/>до обращения клиента</span></div>
       </div>
       <div className="hero-visual" aria-label="Реальные экраны каталога и Telegram Mini App AutoExport">
-        <div className="hero-halo"/><div className="orbital orbital-one"/><div className="orbital orbital-two"/><span className="scene-coordinate">KD® / PRODUCT ENGINEERING</span><div className="visual-label"><span/> AUTOEXPORT ECOSYSTEM <b>01 — 05</b></div><div className="browser-mockup"><div className="browser-chrome"><span/><span/><span/><b>autoexport-showcase.vercel.app</b><i>•••</i></div><img src="/mockups/autoexport-catalog-desktop.png" alt="Каталог AutoExport с реальными фотографиями автомобилей"/></div>
+        <div className="hero-halo"/><div className="orbital orbital-one"/><div className="orbital orbital-two"/><span className="scene-coordinate">KOREDIGITAL / РАЗРАБОТКА</span><div className="visual-label"><span/> ПРОДУКТЫ AUTOEXPORT <b>01 — 05</b></div><div className="browser-mockup"><div className="browser-chrome"><span/><span/><span/><b>autoexport-showcase.vercel.app</b><i>•••</i></div><img src="/mockups/autoexport-catalog-desktop.png" alt="Каталог AutoExport с реальными фотографиями автомобилей"/></div>
         <div className="phone-mockup"><img src="/mockups/autoexport-miniapp-mobile.png" alt="Мобильное приложение AutoExport с реальными фотографиями автомобилей"/></div>
         <p className="visual-caption">Реальные экраны демо · цены и наличие могут устареть</p>
       </div>
     </section>
 
-    <div className="hero-index"><span>01 / DIGITAL ATELIER</span><span>Веб-платформы · Telegram · Автоматизация</span><a href="#case">ИССЛЕДОВАТЬ ПРОДУКТЫ ↓</a></div>
+    <div className="hero-index"><span>01 / РАЗРАБОТКА ДЛЯ АВТОБИЗНЕСА</span><span>Веб-платформы · Telegram · Автоматизация</span><a href="#case">ИССЛЕДОВАТЬ ПРОДУКТЫ ↓</a></div>
     <ProductShowcase/>
-    <section className="atelier"><div className="atelier-top"><span>KOREDIGITAL / ИНДИВИДУАЛЬНАЯ РАЗРАБОТКА</span><span>02 — YOUR BUSINESS</span></div><h2>Ваш бренд.<br/>Ваши правила.<br/><em>Ваш продукт.</em></h2><div className="atelier-bottom"><p>Создаём цифровой сервис вокруг вашего бизнеса: от источников автомобилей до расчётов и обращения к менеджеру.</p><a href="#contact" aria-label="Обсудить индивидуальную разработку">↗</a></div><div className="atelier-tags"><span>Фирменный стиль</span><span>Источники данных</span><span>Логика расчёта</span><span>Интеграции</span></div></section>
+    <section className="atelier"><div className="atelier-top"><span>KOREDIGITAL / ИНДИВИДУАЛЬНАЯ РАЗРАБОТКА</span><span>02 / ВАШ БИЗНЕС</span></div><h2>Ваш бренд.<br/>Ваша логика расчёта.<br/><em>Ваш сервис.</em></h2><div className="atelier-bottom"><p>Настраиваем внешний вид, источники автомобилей, формулы стоимости и путь обращения клиента под вашу компанию.</p><a href="#contact" aria-label="Обсудить индивидуальную разработку">Обсудить платформу <span aria-hidden="true">↗</span></a></div><div className="atelier-tags"><span>Фирменный стиль</span><span>Источники данных</span><span>Логика расчёта</span><span>Интеграции</span></div></section>
 
     <section className="contact-section" id="contact"><div className="contact-orb"/><div className="contact-layout"><div className="contact-copy"><p className="eyebrow">ЕСТЬ ЗАДАЧА ДЛЯ АВТОБИЗНЕСА?</p><h2>Давайте обсудим<br/><em>ваш проект.</em></h2><p>Расскажите, что нужно вашему автосалону: сайт, расчёт стоимости, Telegram-инструмент или поиск автомобилей.</p></div><LeadForm/></div></section>
 

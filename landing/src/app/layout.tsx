@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Metrica from "./metrica";
 import "./globals.css";
+import "./mobile-products.css";
+import "./refinements.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://koredigital.co.kr"),
   title: "Koredigital — цифровые платформы для автобизнеса",

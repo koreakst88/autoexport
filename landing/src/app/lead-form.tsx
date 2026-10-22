@@ -16,7 +16,7 @@ export default function LeadForm() {
       'Здравствуйте! Хочу обсудить цифровой продукт для автобизнеса.',
       `Направление: ${product}`,
       company ? `Компания: ${company}` : '',
-      `Задача: ${brief}`,
+      brief ? `Задача: ${brief}` : '',
     ].filter(Boolean).join('\n');
 
     trackMetricaGoal('lead_draft_requested');
@@ -25,28 +25,17 @@ export default function LeadForm() {
 
   return (
     <form className="lead-form" onSubmit={handleSubmit}>
-      <label>
-        Что нужно разработать?
-        <select name="product" defaultValue="" required>
-          <option value="" disabled>Выберите направление</option>
-          <option>Сайт или каталог автомобилей</option>
-          <option>Расчёт стоимости автомобиля</option>
-          <option>Telegram Mini App</option>
-          <option>Мониторинг объявлений</option>
-          <option>Поиск автомобилей из Китая</option>
-          <option>Другое</option>
-        </select>
-      </label>
+      <fieldset className="direction-picker"><legend>Что хотите разработать?</legend><div>{['Каталог автомобилей','Калькулятор','Telegram-приложение','Мониторинг объявлений','Поиск авто из Китая','Пока не знаю'].map(option=><label key={option}><input type="radio" name="product" value={option} defaultChecked={option==='Пока не знаю'}/><span>{option}</span></label>)}</div></fieldset>
       <label>
         Компания <span className="optional-label">необязательно</span>
         <input className="ym-disable-keys" name="company" type="text" autoComplete="organization" placeholder="Название автосалона или компании" />
       </label>
       <label>
-        Коротко о задаче
-        <textarea className="ym-disable-keys" name="brief" rows={4} required placeholder="Что хотите упростить или запустить?" />
+        Коротко о задаче <span className="optional-label">необязательно</span>
+        <textarea className="ym-disable-keys" name="brief" rows={3} placeholder="Что хотите упростить или запустить?" />
       </label>
-      <button className="button lead-submit" type="submit">Продолжить в Telegram <span>↗</span></button>
-      <p className="contact-caption">Откроется черновик сообщения в Telegram. Проверьте его и нажмите «Отправить»; лендинг не хранит текст заявки.</p>
+      <button className="button lead-submit" type="submit">Обсудить в Telegram <span>↗</span></button>
+      <p className="contact-caption">Подготовим сообщение с выбранным направлением. Отправить его можно будет в Telegram.</p>
     </form>
   );
 }
