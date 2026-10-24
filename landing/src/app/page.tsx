@@ -7,7 +7,7 @@ export default function Home() {
     <Motion/>
     <header className="site-header">
       <a className="brand" href="#top" aria-label="Koredigital — на главную"><img src="/koredigital-logo.svg" alt="Koredigital" /></a>
-      <nav aria-label="Основная навигация"><a href="#case">Продукты</a><a href="#china">Китай</a></nav>
+      <nav aria-label="Основная навигация"><a href="#case">Продукты</a><a href="#china">Источники авто</a></nav>
       <a className="header-cta" href="https://t.me/koreakim88" data-metrica-goal="telegram_contact_open" target="_blank" rel="noopener noreferrer" aria-label="Обсудить проект в Telegram">
         <svg className="header-cta-telegram" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 3.5 18.2 20c-.2 1.2-.9 1.5-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L5.6 13.6.7 12c-1.1-.3-1.1-1 .2-1.5L20 3c.9-.3 1.6.2 1.4.5Z"/></svg>
         <span>Обсудить проект</span><span className="header-cta-arrow" aria-hidden="true">↗</span>
@@ -23,7 +23,7 @@ export default function Home() {
         <ol className="hero-journey" aria-label="Путь клиента"><li><span>01</span>Выбрать авто</li><li><span>02</span>Рассчитать стоимость</li><li><span>03</span>Обратиться в Telegram</li></ol><div className="hero-note"><span className="note-mark">↗</span><span>От поиска автомобиля<br/>до обращения клиента</span></div>
       </div>
       <div className="hero-visual" aria-label="Реальные экраны каталога и Telegram Mini App AutoExport">
-        <div className="hero-halo"/><div className="orbital orbital-one"/><div className="orbital orbital-two"/><span className="scene-coordinate">KOREDIGITAL / РАЗРАБОТКА</span><div className="visual-label"><span/> ПРОДУКТЫ AUTOEXPORT <b>01 — 05</b></div><div className="browser-mockup"><div className="browser-chrome"><span/><span/><span/><b>autoexport-showcase.vercel.app</b><i>•••</i></div><img src="/mockups/autoexport-catalog-desktop.png" alt="Каталог AutoExport с реальными фотографиями автомобилей"/></div>
+        <div className="hero-halo"/><div className="orbital orbital-one"/><div className="orbital orbital-two"/><span className="scene-coordinate">KOREDIGITAL / РАЗРАБОТКА</span><div className="visual-label"><span/> ПРОДУКТЫ AUTOEXPORT <b>01 — 06</b></div><div className="browser-mockup"><div className="browser-chrome"><span/><span/><span/><b>autoexport-showcase.vercel.app</b><i>•••</i></div><img src="/mockups/autoexport-catalog-desktop.png" alt="Каталог AutoExport с реальными фотографиями автомобилей"/></div>
         <div className="phone-mockup"><img src="/mockups/autoexport-miniapp-mobile.png" alt="Мобильное приложение AutoExport с реальными фотографиями автомобилей"/></div>
         <p className="visual-caption">Реальные экраны демо · цены и наличие могут устареть</p>
       </div>
